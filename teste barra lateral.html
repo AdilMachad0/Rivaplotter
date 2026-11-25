@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RivaPlotter — Linhas de Preço</title>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<script src="https://bossanova.uk/jspreadsheet/v4/jexcel.js"></script>
+<link rel="stylesheet" href="https://bossanova.uk/jspreadsheet/v4/jexcel.css" type="text/css" />
+<script src="https://jsuites.net/v4/jsuites.js"></script>
+<link rel="stylesheet" href="https://jsuites.net/v4/jsuites.css" type="text/css" />
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --red:#e42824;--rdim:rgba(228,40,36,.1);--rglow:rgba(228,40,36,.3);
+  --bg:#0c0c0c;--sf:#131313;--sf2:#191919;--sf3:#212121;--sf4:#2c2c2c;
+  --bd:#222;--bd2:#2e2e2e;--bd3:#3c3c3c;
+  --tx:#f0f0f0;--mu:#555;--di:#888;--dim:#bbb;
+  --gr:#00CC96;--bl:#636EFA;--or:#FFA15A;--pu:#AB63FA;--tl:#19D3F3;
+  --sb:480px; 
+}
+
+/* ── TEMA CLARO GLOBAL ── */
+body.light-mode {
+  --bg: #f0f2f5; --sf: #ffffff; --sf2: #f8f9fa; --sf3: #e9ecef; --sf4: #dee2e6;
+  --bd: #ced4da; --bd2: #adb5bd; --bd3: #868e96;
+  --tx: #212529; --mu: #6c757d; --di: #495057; --dim: #343a40;
+}
+
+body{
+  font-family:'Poppins',sans-serif;
+  background:var(--bg);color:var(--tx);
+  display:flex;height:100vh;overflow:hidden;
+  transition: background 0.3s, color 0.3s;
+}
+
+/* ── BARRAS DE ROLAGEM ── */
+::-webkit-scrollbar{width:8px; height:8px} 
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--bd3);border-radius:4px} 
+::-webkit-scrollbar-thumb:hover{background:var(--mu)}
+
+/* ══ SIDEBAR ══ */
+#sb{
+  width:var(--sb);flex-shrink:0;
+  background:var(--sf);border-right:1px solid var(--bd);
+  display:flex;flex-direction:column;height:100vh;overflow:hidden;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+#sb.collapsed { width: 0 !important; border-right: none; }
+
+.sb-head{padding:18px 20px 14px;border-bottom:1px solid var(--bd);flex-shrink:0}
+.sb-logo{font-size:22px;font-weight:900;letter-spacing:-.6px}
+.sb-logo span{color:var(--red)}
+.sb-sub{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--red);letter-spacing:3px;text-transform:uppercase;margin-top:3px}
+.back{
+  margin-top:11px;width:100%;padding:8px 13px;
+  background:transparent;border:1px solid var(--bd2);border-radius:6px;
+  color:var(--mu);font-size:12px;cursor:pointer;text-align:left;
+  font-family:'Poppins',sans-serif;transition:.2s;display:flex;align-items:center;gap:6px;
+}
+.back:hover{background:var(--sf3);color:var(--dim);border-color:var(--bd3)}
+
+/* ── TABS ── */
+.tabs{
+  display:flex;margin:14px 20px 0;gap:4px;
+  background:var(--sf2);border:1px solid var(--bd);
+  border-radius:8px;padding:4px;flex-shrink:0;overflow-x:auto;
+}
+.tab{
+  flex:1 0 auto;padding:10px 16px;font-size:13px;font-weight:600;border-radius:5px;
+  cursor:pointer;transition:.2s;color:var(--mu);
+  border:none;background:transparent;font-family:'Poppins',sans-serif;
+  display:flex;align-items:center;justify-content:center;gap:6px;
+}
+.tab.on{background:var(--sf4);color:var(--tx);box-shadow:0 1px 5px rgba(0,0,0,.08)}
+.tab-hr{height:1px;background:var(--bd);margin:12px 0 0;flex-shrink:0}
+
+/* ── PAINÉIS ── */
+.panel{
+  flex:1;min-height:0;overflow-y:auto;padding:16px 20px 24px;
+  display:none;flex-direction:column;gap:13px;
+}
+.panel.on{display:flex}
+
+/* ── CARD PADRÃO ── */
+.card{background:var(--sf2);border:1px solid var(--bd);border-radius:9px;overflow:hidden;flex-shrink:0}
+.card-h{
+  display:flex;align-items:center;gap:9px;
+  padding:11px 14px;border-bottom:1px solid var(--bd);background:var(--sf3);
+}
+.card-h .ico{font-size:13px}
+.card-h .lbl{font-size:12px;font-weight:700;color:var(--dim);flex:1}
+.bdg{
+  font-family:'JetBrains Mono',monospace;font-size:8.5px;
+  letter-spacing:1.5px;text-transform:uppercase;padding:2px 7px;border-radius:3px;
+}
+.bdg.ok  {background:rgba(0,204,150,.12);color:var(--gr);border:1px solid rgba(0,204,150,.25)}
+.bdg.wait{background:rgba(255,161,90,.1);color:var(--or);border:1px solid rgba(255,161,90,.22)}
+.card-b{padding:14px}
+
+/* ── FORM ── */
+.frow{margin-bottom:12px}.frow:last-child{margin-bottom:0}
+.fl{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.fl .lbl{font-size:11.5px;font-weight:600;color:var(--dim)}
+.tag-r{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--red);background:var(--rdim);padding:2px 6px;border-radius:3px}
+.tag-o{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--mu);background:var(--sf3);padding:2px 6px;border-radius:3px}
+
+select,input[type=text]{
+  width:100%;padding:9px 11px;background:var(--sf);color:var(--tx);
+  border:1px solid var(--bd2);border-radius:6px;
+  font-size:12px;font-family:'Poppins',sans-serif;outline:none;transition:.18s;cursor:pointer;
+}
+select{
+  appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%23555' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 10px center;
+}
+select:focus,input:focus{border-color:var(--red);background:var(--sf2)}
+input[type=text]::placeholder{color:var(--mu)}
+
+/* ── COLUMN SELECTOR ── */
+.search-wrap{position:relative;margin-bottom:8px}
+.search-wrap input{padding-left:32px}
+.search-ico{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--mu);font-size:13px;pointer-events:none}
+.col-sel-wrap{border:1px solid var(--bd2);border-radius:6px;overflow:hidden;max-height:240px;overflow-y:auto;}
+.col-row{
+  display:flex;align-items:center;gap:10px;padding:8px 11px;border-bottom:1px solid var(--bd);
+  cursor:pointer;transition:.15s;
+}
+.col-row:last-child{border-bottom:none}
+.col-row:hover{background:var(--sf3)}
+.col-row.selected{background:rgba(99,110,250,.08);border-left:3px solid var(--bl)}
+.col-row .chk{
+  width:16px;height:16px;border-radius:4px;border:1px solid var(--bd3);background:var(--sf);
+  flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;transition:.15s;
+}
+.col-row.selected .chk{background:var(--bl);border-color:var(--bl);color:#fff}
+.col-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.col-name{font-size:11.5px;color:var(--dim);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.col-row.selected .col-name{color:var(--tx);font-weight:600}
+.sel-actions{display:flex;gap:6px;margin-bottom:8px}
+.sel-act-btn{
+  flex:1;padding:6px;background:transparent;border:1px solid var(--bd2);border-radius:5px;
+  color:var(--mu);font-size:11px;cursor:pointer;font-family:'Poppins',sans-serif;transition:.15s;
+}
+.sel-act-btn:hover{background:var(--sf3);color:var(--dim);border-color:var(--bd3)}
+.sel-count{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--mu);padding:5px 0;text-align:center;}
+
+/* ── ACCORDION CONFIGURAÇÕES ── */
+.acc-card { background: var(--sf2); border: 1px solid var(--bd); border-radius: 9px; overflow: hidden; flex-shrink: 0; }
+.acc-top { padding: 14px; border-bottom: 1px solid var(--bd); }
+.acc-search-bar { display: flex; align-items: center; padding: 10px 14px; background: var(--sf3); border-bottom: 1px solid var(--bd); }
+.acc-search-bar input { flex: 1; border: none; background: transparent; color: var(--tx); font-size: 12px; font-family: 'Poppins', sans-serif; outline: none; margin-left: 8px; padding: 0;}
+.acc-search-bar input::placeholder { color: var(--mu); }
+.acc-wrap { display: flex; flex-direction: column; }
+.acc-item { border-bottom: 1px solid var(--bd); }
+.acc-item:last-child { border-bottom: none; }
+.acc-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px; cursor: pointer; user-select: none; transition: .2s;
+  font-size: 12.5px; font-weight: 600; color: var(--dim);
+}
+.acc-head:hover { background: var(--sf3); color: var(--tx); }
+.acc-head .arr { font-size: 14px; color: var(--mu); transition: transform 0.2s ease; }
+.acc-body {
+  max-height: 0; overflow: hidden; padding: 0 14px; transition: max-height 0.3s ease, padding 0.3s ease;
+  background: var(--sf);
+}
+.acc-item.active .acc-head { color: var(--tx); border-bottom: 1px solid var(--bd); background: var(--sf3); }
+.acc-item.active .arr { transform: rotate(90deg); color: var(--red); }
+.acc-item.active .acc-body { padding: 14px; max-height: 500px; }
+.ph-txt { font-size: 11.5px; color: var(--mu); font-style: italic; }
+
+/* ── BUTTONS ── */
+.btn-main{
+  width:100%;padding:13px;background:var(--red);color:#fff;
+  border:none;border-radius:7px;font-size:13.5px;font-weight:700;
+  cursor:pointer;font-family:'Poppins',sans-serif;transition:.18s;
+  display:flex;align-items:center;justify-content:center;gap:8px;flex-shrink:0;
+}
+.btn-main:hover{background:#c51f1b}
+.btn-main:disabled{background:#1e1e1e;color:var(--mu);cursor:not-allowed}
+.btn-sec{
+  width:100%;padding:9px;background:transparent;color:var(--di);
+  border:1px solid var(--bd2);border-radius:7px;font-size:12px;font-weight:600;
+  cursor:pointer;font-family:'Poppins',sans-serif;transition:.18s;flex-shrink:0;margin-top:7px;
+}
+.btn-sec:hover{background:var(--sf3);color:var(--tx);border-color:var(--bd3)}
+
+/* ══ MAIN ══ */
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative; transition: width 0.3s;}
+#main-top{
+  flex-shrink:0;border-bottom:1px solid var(--bd);
+  padding:18px 32px;display:flex;align-items:center;justify-content:space-between;
+}
+.mt-left-wrap { display: flex; align-items: center; gap: 16px; }
+.sb-toggle-btn { background: transparent; border: none; color: var(--tx); font-size: 24px; cursor: pointer; padding: 4px; border-radius: 4px; transition: 0.2s;}
+.sb-toggle-btn:hover { background: var(--sf3); }
+
+.mt-title{font-size:19px;font-weight:700;letter-spacing:-.3px}
+.mt-sub{font-size:11.5px;color:var(--mu);margin-top:3px}
+.mt-meta{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--mu);text-align:right;line-height:1.8}
+.theme-btn {
+  background: var(--sf2); border: 1px solid var(--bd); padding: 8px 12px;
+  border-radius: 6px; color: var(--tx); cursor: pointer; font-size: 12px;
+  font-family: 'Poppins', sans-serif; font-weight: 600; transition: 0.2s;
+}
+.theme-btn:hover { background: var(--sf3); }
+
+#main-body{flex:1;overflow-y:auto;padding:22px 32px;display:flex;flex-direction:column;gap:18px}
+#chart-div{width:100%; flex: 1;}
+
+/* ── JSPREADSHEET WRAPPER & TWEAKS ── */
+#tbl-wrap {
+  flex: 1; border: 1px solid var(--bd); border-radius: 6px; 
+  background: #fff; overflow: hidden; display: none; flex-direction: column;
+}
+#tbl { flex: 1; overflow: auto; display: flex; flex-direction: column; position: relative; }
+.jexcel_toolbar { background: #f8f9fa !important; border-bottom: 1px solid #ddd !important; padding: 5px !important;}
+.jexcel > thead > tr > td { background-color: #f1f3f4 !important; color: #333 !important; font-family: 'Poppins', sans-serif !important; font-size: 12px !important;}
+.jexcel > tbody > tr > td { font-family: 'JetBrains Mono', monospace !important; font-size: 12.5px !important; color: #000 !important; }
+
+/* ── PREVIEW TAB ── */
+.prv-empty{
+  flex:1;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;color:var(--mu);text-align:center;gap:10px;padding:50px 0;
+}
+.prv-empty .ico{font-size:38px;opacity:.18}
+.prv-empty p{font-size:13px}.prv-empty small{font-size:11px;opacity:.4}
+
+/* ══ PiP ══ */
+#pip{
+  position:fixed;bottom:26px;right:28px;width:290px;
+  background:var(--sf);border:1px solid var(--bd3);border-radius:12px;
+  box-shadow:0 10px 40px rgba(0,0,0,.75),0 0 0 1px var(--bd);
+  z-index:9999;display:none;flex-direction:column;overflow:hidden;
+  transition:width .28s ease,box-shadow .22s;
+}
+#pip:hover{box-shadow:0 14px 48px rgba(0,0,0,.85),0 0 0 1px var(--red)}
+#pip.big{width:440px}
+.pip-h{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:9px 13px;border-bottom:1px solid var(--bd);background:var(--sf2);flex-shrink:0;
+}
+.pip-left{display:flex;align-items:center;gap:8px}
+.pip-dot{width:7px;height:7px;border-radius:50%;background:var(--red);box-shadow:0 0 8px var(--rglow);animation:dpulse 2s ease-in-out infinite}
+@keyframes dpulse{0%,100%{opacity:1}50%{opacity:.3}}
+.pip-title{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:var(--di);letter-spacing:1px}
+.pip-acts{display:flex;align-items:center;gap:4px}
+.pip-btn{background:none;border:1px solid transparent;color:var(--mu);cursor:pointer;font-size:13px;padding:3px 6px;width:auto;border-radius:4px;transition:.18s;line-height:1}
+.pip-btn:hover{background:var(--sf3);color:var(--tx);border-color:var(--bd2)}
+#pip-chart{width:100%;height:150px;transition:height .28s ease}
+#pip.big #pip-chart{height:240px}
+.pip-f{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:7px 13px;border-top:1px solid var(--bd);
+  font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--mu);background:var(--sf2);flex-shrink:0;
+}
+.pip-f .hi{color:var(--gr)}
+</style>
+</head>
+<body>
+
+<div id="sb">
+  <div class="sb-head">
+    <div class="sb-logo">Riva<span>Plotter</span></div>
+    <div class="sb-sub">Linhas de Preço · Histórico</div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab on" id="tb-cfg" onclick="goTab('cfg')">⚙️ Configurar</button>
+    <button class="tab"    id="tb-prv" onclick="goTab('prv')">📊 Prévia</button>
+  </div>
+  <div class="tab-hr"></div>
+
+  <div class="panel on" id="panel-cfg">
+
+    <div class="card">
+      <div class="card-h">
+        <span class="ico">📂</span><span class="lbl">Planilha de Dados</span>
+      </div>
+      <div class="card-b">
+        <p style="font-size:11.5px; color:var(--mu); margin-bottom:10px; line-height:1.5">
+          Cole seus dados diretamente na planilha ao lado. Os títulos das séries devem ficar sempre na <strong>Linha 1</strong>.
+        </p>
+        <input type="file" id="finput" accept=".csv,.xlsx,.xls" onchange="loadFile(this.files[0])" style="display:none">
+        <button class="btn-sec" style="margin-top:0;" onclick="document.getElementById('finput').click()">📄 Substituir por Arquivo (.CSV)</button>
+      </div>
+    </div>
+
+    <div class="card" id="card-x">
+      <div class="card-h"><span class="ico">📅</span><span class="lbl">Coluna de Data (Eixo X)</span><span class="bdg ok" id="bdg-x">OK</span></div>
+      <div class="card-b">
+        <div class="frow">
+          <div class="fl"><span class="lbl">Selecione a coluna principal</span><span class="tag-r">REQUIRED</span></div>
+          <select id="sel-x" onchange="onXChange()"><option value="">— Selecione —</option></select>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="card-ser">
+      <div class="card-h"><span class="ico">📈</span><span class="lbl">Séries de Valores</span><span class="bdg wait" id="bdg-ser">0 SELECIONADAS</span></div>
+      <div class="card-b">
+        <div class="search-wrap">
+          <span class="search-ico">🔍</span><input type="text" id="search-col" placeholder="Pesquisar coluna..." oninput="filterCols()">
+        </div>
+        <div class="sel-actions">
+          <button class="sel-act-btn" onclick="selAll()">✓ Selecionar Todos</button>
+          <button class="sel-act-btn" onclick="selNone()">✕ Limpar Seleção</button>
+        </div>
+        <div class="col-sel-wrap" id="col-list"></div>
+        <div class="sel-count" id="sel-count">0 colunas selecionadas</div>
+      </div>
+    </div>
+
+    <div class="acc-card" id="card-opt">
+      <div class="acc-top">
+        <div class="frow" style="margin-bottom:0;">
+          <div class="fl"><span class="lbl">Tema do Gráfico</span></div>
+          <select id="opt-th" onchange="autoRender()">
+            <option value="dark">Escuro</option>
+            <option value="light">Claro</option>
+          </select>
+        </div>
+      </div>
+      
+      <div class="acc-search-bar"><span style="font-size:14px; color:var(--mu);">🔍</span><input type="text" placeholder="Pesquisar configuração..."></div>
+      <div class="acc-wrap">
+        <div class="acc-item"><div class="acc-head" onclick="toggleAcc(this)"><span>Linhas, pontos e áreas</span><span class="arr">→</span></div>
+          <div class="acc-body">
+            <div class="frow"><div class="fl"><span class="lbl">Suavizar Linhas</span></div><select id="opt-sm" onchange="autoRender()"><option value="linear">Linhas Retas</option><option value="spline">Curvas Suaves</option></select></div>
+            <div class="frow"><div class="fl"><span class="lbl">Mostrar Marcadores</span></div><select id="opt-mk" onchange="autoRender()"><option value="lines">Somente Linha</option><option value="lines+markers">Linha + Pontos</option></select></div>
+          </div>
+        </div>
+        <div class="acc-item"><div class="acc-head" onclick="toggleAcc(this)"><span>Eixo Y</span><span class="arr">→</span></div>
+          <div class="acc-body">
+            <div class="frow"><div class="fl"><span class="lbl">Label Eixo Y</span><span class="tag-o">OPCIONAL</span></div><input type="text" id="opt-y" placeholder="Ex: Preço (R$)" oninput="autoRender()"></div>
+          </div>
+        </div>
+        <div class="acc-item"><div class="acc-head" onclick="toggleAcc(this)"><span>Cabeçalho</span><span class="arr">→</span></div>
+          <div class="acc-body">
+            <div class="frow"><div class="fl"><span class="lbl">Título</span><span class="tag-o">OPCIONAL</span></div><input type="text" id="opt-ti" placeholder="Ex: Histórico de Preços — CPUs" oninput="autoRender()"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-main" id="btn-g" onclick="render()" disabled>📈 Gerar Gráfico</button>
+    <button class="btn-sec"  id="btn-s" onclick="salvarGraficoHTML()" style="display:none">💾 Salvar Apenas o Gráfico (HTML)</button>
+  </div>
+
+  <div class="panel" id="panel-prv">
+    <div class="prv-empty" id="prv-empty"><div class="ico">📈</div><p>Nenhum gráfico ainda</p><small>Selecione dados → o gráfico aparece aqui automaticamente</small></div>
+    <div id="prv-content" style="display:none; width: 100%; height: 100%; flex-direction: column;">
+    </div>
+  </div>
+</div>
+
+<div id="main">
+  <div id="main-top">
+    <div class="mt-left-wrap">
+      <button class="sb-toggle-btn" onclick="toggleSidebar()" title="Recolher/Expandir Menu">☰</button>
+      <div>
+        <div class="mt-title" id="mt-title">Área de Trabalho</div>
+        <div class="mt-sub"   id="mt-sub">Insira os dados na planilha para começar</div>
+      </div>
+    </div>
+    <div style="display:flex; align-items:center; gap: 10px;">
+      <div class="mt-meta" id="mt-meta" style="margin-right: 10px;"></div>
+      <button class="theme-btn" onclick="openPip()" title="Monitorar o gráfico em tempo real">🗔 Abrir PiP</button>
+      <button class="theme-btn" onclick="toggleAppTheme()">🌗 Alternar Tema</button>
+    </div>
+  </div>
+  <div id="main-body">
+    <div id="chart-div" style="display:none"></div>
+    <div id="tbl-wrap" style="display:none"><div id="tbl"></div></div>
+  </div>
+</div>
+
+<script>
+const PAL=['#e42824','#636EFA','#00CC96','#AB63FA','#FFA15A','#19D3F3','#FF6692','#B6E880','#FF97FF','#FECB52','#72B7B2','#EE553B','#54A24B','#C5D4D4','#BAB0AC','#F0027F','#0082C8','#FFBC79','#D7B5A6','#AAD2CE'];
+const TEMAS={
+  dark: {bg:'#0c0c0c',paper:'#0c0c0c',font:'#f0f0f0',grid:'#1c1c1c',mu:'#404040'},
+  light:{bg:'#f4f4f9',paper:'#f4f4f9',font:'#1a1a1a',grid:'#e0e0e0',mu:'#aaa'}
+};
+
+let rawRows = [], allCols = [], xCol = '', selected = new Set(), snap = null, rTimer = null;
+let pipBig = false, pipOpen = false;
+window.mainSheet = null;
+
+/* ── INICIALIZAÇÃO DA PLANILHA ── */
+window.onload = function() {
+  const initHeaders = ['Data', 'Série 1', 'Série 2', 'Série 3', 'Série 4', 'Série 5'];
+  const initRows = Array.from({length: 60}, () => ['', '', '', '', '', '']);
+  
+  document.getElementById('tbl-wrap').style.display = 'flex';
+  
+  initSpreadsheet(initHeaders, initRows);
+  syncDataFromSheet();
+};
+
+/* ── UI TOGGLES ── */
+function toggleSidebar() {
+  document.getElementById('sb').classList.toggle('collapsed');
+  setTimeout(() => { if(snap) Plotly.Plots.resize(document.getElementById('chart-div')); }, 350);
+}
+
+function toggleAppTheme() { document.body.classList.toggle('light-mode'); }
+
+function goTab(t){
+  ['cfg','prv'].forEach(k=>{
+    document.getElementById('tb-'+k).classList.toggle('on',k===t);
+    document.getElementById('panel-'+k).classList.toggle('on',k===t);
+  });
+  if(snap){
+    if(t === 'cfg') {
+      document.getElementById('tbl-wrap').style.display = 'flex';
+      document.getElementById('chart-div').style.display = 'none';
+      document.getElementById('main-body').appendChild(document.getElementById('chart-div'));
+    } else {
+      document.getElementById('tbl-wrap').style.display = 'none';
+      document.getElementById('chart-div').style.display = 'block';
+      document.getElementById('prv-empty').style.display = 'none';
+      document.getElementById('prv-content').style.display = 'flex';
+      document.getElementById('prv-content').appendChild(document.getElementById('chart-div'));
+      Plotly.Plots.resize(document.getElementById('chart-div'));
+    }
+  }
+}
+
+function toggleAcc(el) {
+  const item = el.closest('.acc-item'); const body = item.querySelector('.acc-body'); const isActive = item.classList.contains('active');
+  document.querySelectorAll('.acc-item').forEach(i => { i.classList.remove('active'); i.querySelector('.acc-body').style.maxHeight = '0'; i.querySelector('.acc-body').style.padding = '0 14px'; });
+  if (!isActive) { item.classList.add('active'); body.style.maxHeight = body.scrollHeight + 30 + 'px'; body.style.padding = '14px'; }
+}
+
+/* ── LÓGICA DE DADOS ── */
+async function loadFile(f){
+  if(!f) return;
+  const ext=f.name.split('.').pop().toLowerCase();
+  try{
+    let text='';
+    if(ext==='csv'){
+      try{ text=new TextDecoder('utf-8',{fatal:true}).decode(await f.arrayBuffer()); }
+      catch{ text=new TextDecoder('iso-8859-1').decode(await f.arrayBuffer()); }
+    } else if(['xlsx','xls'].includes(ext)){
+      const wb=XLSX.read(await f.arrayBuffer(),{type:'array'});
+      text=XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]],{FS:';'});
+    } else { alert('Use .csv, .xlsx ou .xls'); return; }
+    parseCSV(text);
+  } catch(e){ alert('Erro ao carregar arquivo: '+e.message); }
+}
+
+function parseCSV(text){
+  const lines=text.split('\n').map(l=>l.trim()).filter(l=>l.length>0);
+  if(lines.length<2) return alert('Arquivo vazio ou inválido.');
+  const sep=lines[0].includes(';') ? ';' : ',';
+  const headers=lines[0].split(sep).map(h=>h.trim().replace(/^"|"$/g,''));
+
+  let tempRows=[];
+  for(let i=1;i<lines.length;i++){
+    const vals=lines[i].split(sep);
+    if(vals.length < headers.length-2) continue; 
+    const row={};
+    headers.forEach((h,j)=>{
+      let v=(vals[j]||'').trim().replace(/^"|"$/g,'');
+      if(j>0 && v!==''){
+        v=v.replace(/\./g,'').replace(',','.');
+        row[h]=isNaN(parseFloat(v)) ? v : parseFloat(v);
+      } else row[h]=v;
+    });
+    tempRows.push(row);
+  }
+
+  initSpreadsheet(headers, tempRows);
+  syncDataFromSheet();
+  
+  selected.clear();
+  let cnt=0; allCols.forEach(c=>{ if(cnt<5 && hasValues(c)){ selected.add(c); cnt++; } });
+  updateColList(); checkReady(); autoRender();
+}
+
+function initSpreadsheet(headers, rows) {
+  let data2D = [headers];
+  rows.forEach(r => data2D.push(headers.map(h => r[h])));
+
+  let tblEl = document.getElementById('tbl');
+  if(window.mainSheet) { jspreadsheet.destroy(tblEl); }
+  tblEl.innerHTML = '';
+  
+  window.mainSheet = jexcel(tblEl, {
+      data: data2D,
+      minDimensions: [Math.max(headers.length + 5, 15), Math.max(rows.length + 20, 100)],
+      defaultColWidth: 110,
+      freezeColumns: 1, 
+      toolbar: [
+        { type: 'i', content: 'undo', onclick: function() { window.mainSheet.undo(); } },
+        { type: 'i', content: 'redo', onclick: function() { window.mainSheet.redo(); } },
+        { type: 'i', content: 'format_bold', k: 'font-weight', v: 'bold' },
+        { type: 'color', content: 'format_color_text', k: 'color' },
+        { type: 'color', content: 'format_color_fill', k: 'background-color' }
+      ],
+      onchange: function() { syncDataFromSheet(); autoRender(); },
+      oninsertrow: function() { syncDataFromSheet(); autoRender(); },
+      oninsertcolumn: function() { syncDataFromSheet(); autoRender(); },
+      ondeleterow: function() { syncDataFromSheet(); autoRender(); },
+      ondeletecolumn: function() { syncDataFromSheet(); autoRender(); }
+  });
+}
+
+function syncDataFromSheet() {
+  try {
+    let tblEl = document.getElementById('tbl');
+    if(!tblEl || !window.mainSheet) return;
+    let data2D = window.mainSheet.getData();
+    if(data2D.length < 1) return;
+    
+    let headers = data2D[0].map(h => h ? h.toString().trim() : '');
+    
+    let newRawRows = [];
+    for(let i=1; i<data2D.length; i++) {
+      let row = data2D[i];
+      if(row.every(cell => cell === '' || cell === null)) continue;
+      let obj = {};
+      headers.forEach((h, j) => {
+        if(h) {
+          let val = row[j];
+          obj[h] = (val !== '' && val !== null && !isNaN(val)) ? parseFloat(val) : val;
+        }
+      });
+      newRawRows.push(obj);
+    }
+    rawRows = newRawRows;
+    
+    let sx = document.getElementById('sel-x');
+    let currentXVal = sx.value || headers[0];
+    sx.innerHTML = '<option value="">— Selecione —</option>';
+    headers.forEach(h => {
+      if(!h) return;
+      let o = document.createElement('option');
+      o.value = h; o.textContent = h;
+      if(h === currentXVal) o.selected = true;
+      sx.appendChild(o);
+    });
+    
+    xCol = sx.value;
+    allCols = headers.filter(h => h && h !== xCol);
+    
+    let validCols = new Set(headers);
+    for (let sel of selected) { if (!validCols.has(sel)) selected.delete(sel); }
+    buildColList();
+  } catch(e) {
+    console.warn("Sincronização pendente, aguardando dados da planilha...");
+  }
+}
+
+function hasValues(col){ return rawRows.some(r=>r[col]!=null); }
+
+function onXChange(doRender=true){
+  xCol=document.getElementById('sel-x').value;
+  if(!xCol) return;
+  allCols=Object.keys(rawRows[0]||{}).filter(h=>h!==xCol);
+  document.getElementById('bdg-x').textContent='OK'; document.getElementById('bdg-x').className='bdg ok';
+  buildColList(); checkReady(); if(doRender) autoRender();
+}
+
+function buildColList(){ renderColList(allCols); }
+function filterCols(){ renderColList(allCols.filter(c=>c.toLowerCase().includes(document.getElementById('search-col').value.toLowerCase()))); }
+function renderColList(cols){
+  const el=document.getElementById('col-list'); el.innerHTML='';
+  cols.forEach((c,i)=>{
+    const palIdx=allCols.indexOf(c)%PAL.length; const isSel=selected.has(c); const hasV=hasValues(c);
+    const div=document.createElement('div');
+    div.className='col-row'+(isSel?' selected':'')+(hasV?'':' disabled');
+    div.style.opacity=hasV?'1':'.3'; div.style.cursor=hasV?'pointer':'not-allowed';
+    div.innerHTML=`<div class="chk">${isSel?'✓':''}</div><div class="col-dot" style="background:${PAL[palIdx]}"></div><div class="col-name" title="${c}">${c}</div>`;
+    if(hasV) div.addEventListener('click',()=>toggleCol(c));
+    el.appendChild(div);
+  });
+  updateSelCount();
+}
+
+function toggleCol(c){ selected.has(c)?selected.delete(c):selected.add(c); updateColList(); checkReady(); autoRender(); }
+function updateColList(){ filterCols(); }
+function selAll(){ allCols.filter(hasValues).forEach(c=>selected.add(c)); updateColList(); checkReady(); autoRender(); }
+function selNone(){ selected.clear(); updateColList(); checkReady(); autoRender(); }
+function updateSelCount(){
+  const n=selected.size;
+  document.getElementById('sel-count').textContent=`${n} coluna${n!==1?'s':''} selecionada${n!==1?'s':''}`;
+  document.getElementById('bdg-ser').textContent=`${n} SELECIONADA${n!==1?'S':''}`; document.getElementById('bdg-ser').className=n>0?'bdg ok':'bdg wait';
+}
+function checkReady(){ document.getElementById('btn-g').disabled=!(xCol&&selected.size>0); }
+
+/* ── PLOTLY GRÁFICO ── */
+function autoRender(){ if(!xCol||selected.size===0) return; clearTimeout(rTimer); rTimer=setTimeout(()=>render(true),200); }
+
+function buildTraces(){
+  const xVals=rawRows.map(r=>r[xCol]);
+  const shape=document.getElementById('opt-sm').value;
+  const mode=document.getElementById('opt-mk').value;
+  const tema=TEMAS[document.getElementById('opt-th').value];
+  const traces=[];
+  [...selected].forEach((c)=>{
+    traces.push({
+      name:c, x:xVals, y:rawRows.map(r=>r[c]), type:'scatter', mode:mode,
+      line:{color:PAL[allCols.indexOf(c)%PAL.length], width:2, shape}, marker:{size:5}, connectgaps:true
+    });
+  });
+  return {traces,tema};
+}
+
+function render(){
+  if(!xCol||selected.size===0) return;
+  const {traces,tema}=buildTraces();
+  const layout={
+    paper_bgcolor:tema.paper, plot_bgcolor:tema.bg, font:{family:'Poppins',color:tema.font}, margin:{l:80,r:30,t:20,b:90}, hovermode:'x unified',
+    xaxis:{gridcolor:tema.grid, tickfont:{color:tema.mu,size:10,family:'JetBrains Mono'}, title:{text:xCol,font:{color:tema.mu,size:10}}, tickangle:-30},
+    yaxis:{gridcolor:tema.grid, tickfont:{color:tema.mu,size:10,family:'JetBrains Mono'}, title:{text:document.getElementById('opt-y').value||'Preço (R$)',font:{color:tema.mu,size:10}}, tickprefix:'R$ '},
+    legend:{orientation:'h', yanchor:'top', y:-0.22, xanchor:'center', x:0.5, font:{size:10,family:'Poppins'}},
+  };
+
+  document.getElementById('mt-title').textContent=document.getElementById('opt-ti').value||'Gráfico de Benchmarks';
+  document.getElementById('mt-sub').textContent=`${selected.size} série${selected.size!==1?'s':''} · ${rawRows.length} linhas computadas`;
+
+  const curTab = document.getElementById('tb-cfg').classList.contains('on') ? 'cfg' : 'prv';
+  
+  if (curTab === 'cfg') {
+      document.getElementById('chart-div').style.display = 'none';
+  } else {
+      document.getElementById('prv-empty').style.display = 'none';
+      document.getElementById('prv-content').style.display = 'flex';
+      document.getElementById('prv-content').appendChild(document.getElementById('chart-div'));
+      document.getElementById('chart-div').style.display = 'block';
+  }
+  
+  Plotly.react('chart-div',traces,layout,{responsive:true});
+  snap={traces}; document.getElementById('btn-s').style.display='block';
+  
+  if(pipOpen) drawPip();
+}
+
+/* ── PiP (Picture in Picture) ── */
+function openPip() {
+  if(!xCol || selected.size === 0) { alert('Você precisa selecionar os dados para gerar o gráfico primeiro!'); return; }
+  pipOpen = true;
+  document.getElementById('pip').style.display = 'flex';
+  drawPip();
+}
+
+function drawPip(){
+  if(!xCol||selected.size===0) return;
+  const xVals=rawRows.map(r=>r[xCol]);
+  const pipTraces=[...selected].slice(0,8).map((c,i)=>({
+    x:xVals, y:rawRows.map(r=>r[c]), type:'scatter', mode:'lines',
+    line:{color:PAL[allCols.indexOf(c)%PAL.length],width:1.5,shape:'linear'}, connectgaps:true, hoverinfo:'none', name:c,
+  }));
+  Plotly.react('pip-chart',pipTraces,{height:pipBig?240:150, xaxis:{visible:false}, yaxis:{visible:false}, paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)', margin:{l:4,r:4,t:4,b:4}, showlegend:false, hovermode:false},{responsive:true,staticPlot:true,displayModeBar:false});
+}
+function togglePip(){ pipBig=!pipBig; document.getElementById('pip').classList.toggle('big',pipBig); document.getElementById('pip-exp').textContent=pipBig?'⊡':'⛶'; if(snap) drawPip(); }
+function closePip(){ pipOpen=false; document.getElementById('pip').style.display='none'; }
+
+/* ── SALVAR APENAS O GRÁFICO HTML ── */
+function salvarGraficoHTML(){
+  if(!snap) return;
+  const title = document.getElementById('opt-ti').value.trim() || 'RivaPlotter_Grafico';
+  const layoutObj = document.getElementById('chart-div').layout || {};
+  
+  const sHead = "</" + "head>";
+  const sBody = "</" + "body>";
+  const sHtml = "</" + "html>";
+  const sScript = "</" + "script>";
+
+  const htmlStr = "<!DOCTYPE html>\\n<html lang='pt-BR'>\\n<head>\\n<meta charset='UTF-8'>\\n" +
+    "<title>" + title + "</title>\\n" +
+    "<script src='https://cdn.plot.ly/plotly-2.27.0.min.js'>" + sScript + "\\n" +
+    "<style>\\n  body { margin:0; padding:0; background: " + (layoutObj.paper_bgcolor || '#0c0c0c') + "; overflow: hidden; }\\n  #chart { width: 100vw; height: 100vh; }\\n</style>\\n" +
+    sHead + "\\n<body>\\n<div id='chart'></div>\\n<script>\\n" +
+    "  var traces = " + JSON.stringify(snap.traces) + ";\\n" +
+    "  var layout = " + JSON.stringify(layoutObj) + ";\\n" +
+    "  Plotly.newPlot('chart', traces, layout, {responsive: true});\\n" +
+    sScript + "\\n" + sBody + "\\n" + sHtml;
+
+  // Substituí \n literal por \\n para o VS Code não quebrar as strings em múltiplas linhas sem querer
+  const cleanHtmlStr = htmlStr.replace(/\\\\n/g, '\\n');
+
+  const b = new Blob([cleanHtmlStr], {type:'text/html;charset=utf-8'});
+  const a = document.createElement('a'); 
+  a.href = URL.createObjectURL(b); 
+  a.download = title.toUpperCase().replace(/\\s+/g,'_') + '.html'; 
+  a.click();
+}
+
+window.addEventListener('resize',()=>{ if(snap) { Plotly.Plots.resize(document.getElementById('chart-div')); if(pipOpen) Plotly.Plots.resize(document.getElementById('pip-chart')); }});
+</script>
+</body>
+</html>

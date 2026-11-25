@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RivaPlotter — Barras Horizontais Compostas</title>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --red:#e42824;--rdim:rgba(228,40,36,.1);--rglow:rgba(228,40,36,.25);
+  --bg:#0c0c0c;--sf:#131313;--sf2:#191919;--sf3:#202020;--sf4:#2c2c2c;
+  --bd:#232323;--bd2:#303030;--bd3:#3a3a3a;
+  --tx:#f0f0f0;--mu:#555;--di:#888;--dim:#bbb;
+  --gr:#00CC96;--bl:#636EFA;--or:#FFA15A;--pu:#AB63FA;
+  --sb-w:390px;
+}
+body{font-family:'Poppins',sans-serif;background:var(--bg);color:var(--tx);display:flex;height:100vh;overflow:hidden}
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#2a2a2a;border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:#3c3c3c}
+
+/* SIDEBAR */
+#sb{width:var(--sb-w);flex-shrink:0;background:var(--sf);border-right:1px solid var(--bd);display:flex;flex-direction:column;overflow:hidden}
+.sb-head{padding:18px 20px 14px;border-bottom:1px solid var(--bd);flex-shrink:0}
+.sb-logo{font-size:22px;font-weight:900;letter-spacing:-.6px}
+.sb-logo span{color:var(--red)}
+.sb-tag{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--red);letter-spacing:3px;text-transform:uppercase;margin-top:3px}
+.back{margin-top:11px;width:100%;padding:8px 13px;background:transparent;border:1px solid var(--bd2);border-radius:6px;color:var(--mu);font-size:12px;cursor:pointer;text-align:left;font-family:'Poppins',sans-serif;transition:.2s;display:flex;align-items:center;gap:6px}
+.back:hover{background:var(--sf3);color:var(--dim);border-color:var(--bd3)}
+
+.tab-row{display:flex;margin:14px 20px 0;gap:4px;background:var(--sf2);border:1px solid var(--bd);border-radius:8px;padding:4px;flex-shrink:0}
+.tab-btn{flex:1;padding:8px 0;font-size:12px;font-weight:600;border-radius:5px;cursor:pointer;transition:.2s;color:var(--mu);border:none;background:transparent;font-family:'Poppins',sans-serif;display:flex;align-items:center;justify-content:center;gap:6px}
+.tab-btn.on{background:var(--sf4);color:var(--tx);box-shadow:0 1px 5px rgba(0,0,0,.5)}
+.tab-hr{height:1px;background:var(--bd);margin:12px 0 0;flex-shrink:0}
+
+.panel{flex:1;overflow-y:auto;padding:16px 20px 24px;display:none;flex-direction:column;gap:14px}
+.panel.on{display:flex}
+
+.card{background:var(--sf2);border:1px solid var(--bd);border-radius:9px;overflow:hidden}
+.card-head{display:flex;align-items:center;gap:9px;padding:11px 15px;border-bottom:1px solid var(--bd);background:var(--sf3)}
+.card-head .ico{font-size:14px}
+.card-head .label{font-size:12px;font-weight:700;color:var(--dim);flex:1}
+.badge{font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:1.5px;text-transform:uppercase;padding:2px 7px;border-radius:3px}
+.badge.ok  {background:rgba(0,204,150,.12);color:var(--gr);border:1px solid rgba(0,204,150,.25)}
+.badge.wait{background:rgba(255,161,90,.1);color:var(--or);border:1px solid rgba(255,161,90,.22)}
+.card-body{padding:14px 15px}
+
+.upz{border:2px dashed var(--bd3);border-radius:7px;padding:20px 14px;text-align:center;cursor:pointer;transition:.2s;position:relative}
+.upz:hover,.upz.dov{border-color:var(--red);background:var(--rdim)}
+.upz input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.upz .ico{font-size:26px;margin-bottom:8px}
+.upz-main{font-size:13px;font-weight:600;color:var(--dim);margin-bottom:4px}
+.upz-sub{font-size:11px;color:var(--mu);line-height:1.5}
+.upz-fmt{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--mu);margin-top:6px;letter-spacing:1px}
+
+.file-pill{display:flex;align-items:center;gap:10px;background:rgba(0,204,150,.07);border:1px solid rgba(0,204,150,.2);border-radius:7px;padding:10px 13px}
+.file-pill .name{font-size:12px;color:var(--gr);font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-pill .info{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--mu)}
+.pill-rm{background:none;border:none;color:var(--mu);cursor:pointer;font-size:15px;padding:0;width:auto;transition:.2s;line-height:1}
+.pill-rm:hover{color:var(--red)}
+
+.mini-table{border:1px solid var(--bd);border-radius:6px;overflow:hidden;margin-top:11px;font-family:'JetBrains Mono',monospace;font-size:10px}
+.mtr{display:grid;border-bottom:1px solid var(--bd)}
+.mtr:last-child{border-bottom:none}
+.mtd{padding:5px 8px;color:var(--mu);border-right:1px solid var(--bd);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mtd:last-child{border-right:none}
+.mtd.h{color:var(--dim);background:rgba(255,255,255,.025);font-weight:700}
+
+.frow{margin-bottom:12px}.frow:last-child{margin-bottom:0}
+.fl{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.fl .lbl{font-size:11.5px;font-weight:600;color:var(--dim)}
+.tag-r{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--red);background:var(--rdim);padding:2px 6px;border-radius:3px}
+.tag-o{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--mu);background:var(--sf3);padding:2px 6px;border-radius:3px}
+
+select,input[type=text],input[type=number]{
+  width:100%;padding:9px 11px;background:var(--sf);color:var(--tx);
+  border:1px solid var(--bd2);border-radius:6px;font-size:12px;
+  font-family:'Poppins',sans-serif;outline:none;transition:.18s;cursor:pointer;
+}
+select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%23555' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center}
+select:focus,input:focus{border-color:var(--red);background:var(--sf2)}
+input[type=text]::placeholder{color:var(--mu)}
+.hint{display:inline-flex;align-items:center;margin-top:5px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--bl);background:rgba(99,110,250,.08);padding:3px 8px;border-radius:4px;border:1px solid rgba(99,110,250,.18);gap:4px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* SERIES BUILDER */
+.ser-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.ser-head .lbl{font-size:11.5px;font-weight:600;color:var(--dim)}
+.add-btn{background:none;border:1px solid var(--bd3);color:var(--di);font-size:11px;padding:5px 11px;border-radius:5px;cursor:pointer;font-family:'Poppins',sans-serif;width:auto;transition:.2s}
+.add-btn:hover{border-color:var(--red);color:var(--red);background:var(--rdim)}
+
+.ser-row{display:flex;align-items:center;gap:7px;background:var(--sf3);border:1px solid var(--bd2);border-radius:7px;padding:9px 11px;margin-bottom:8px}
+.ser-row:last-child{margin-bottom:0}
+.sc{width:30px;height:30px;padding:0;border:1px solid var(--bd3);border-radius:5px;cursor:pointer;background:none;flex-shrink:0}
+.sc::-webkit-color-swatch-wrapper{padding:2px}.sc::-webkit-color-swatch{border-radius:3px;border:none}
+.ss{flex:1.4;min-width:0;padding:7px 9px;background:var(--sf);color:var(--tx);border:1px solid var(--bd2);border-radius:5px;font-size:11px;font-family:'Poppins',sans-serif;outline:none;cursor:pointer;appearance:none}
+.ss:focus{border-color:var(--red)}
+.sn{flex:1;min-width:0;padding:7px 9px;background:var(--sf);color:var(--tx);border:1px solid var(--bd2);border-radius:5px;font-size:11px;font-family:'Poppins',sans-serif;outline:none}
+.sn::placeholder{color:var(--mu)}.sn:focus{border-color:var(--bl)}
+.sr-rm{background:none;border:none;color:var(--mu);cursor:pointer;font-size:14px;padding:0;width:auto;transition:.2s;flex-shrink:0}
+.sr-rm:hover{color:var(--red)}
+
+.btn-main{width:100%;padding:13px;background:var(--red);color:#fff;border:none;border-radius:7px;font-size:13.5px;font-weight:700;cursor:pointer;font-family:'Poppins',sans-serif;transition:.18s;display:flex;align-items:center;justify-content:center;gap:8px;flex-shrink:0}
+.btn-main:hover{background:#c51f1b}
+.btn-main:disabled{background:#202020;color:var(--mu);cursor:not-allowed}
+.btn-sec{width:100%;padding:9px;background:transparent;color:var(--di);border:1px solid var(--bd2);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Poppins',sans-serif;transition:.18s;flex-shrink:0;margin-top:7px}
+.btn-sec:hover{background:var(--sf3);color:var(--tx);border-color:var(--bd3)}
+
+/* PREVIEW TAB */
+.prv-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--mu);text-align:center;gap:10px;padding:50px 0}
+.prv-empty .ico{font-size:38px;opacity:.18}
+.prv-empty p{font-size:13px}.prv-empty small{font-size:11px;opacity:.45}
+#tab-chart-wrap{border:1px solid var(--bd);border-radius:7px;overflow:hidden}
+.leg-strip{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.leg-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--di)}
+.leg-dot{width:9px;height:9px;border-radius:2px;flex-shrink:0}
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.stat-c{background:var(--sf2);border:1px solid var(--bd);border-radius:7px;padding:11px 13px}
+.stat-lbl{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--mu);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:5px}
+.stat-val{font-size:17px;font-weight:700;color:var(--tx)}
+.stat-val.r{color:var(--red)}.stat-val.g{color:var(--gr)}.stat-val.b{color:var(--bl)}
+
+/* MAIN */
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative}
+#main-head{flex-shrink:0;border-bottom:1px solid var(--bd);padding:18px 32px;display:flex;align-items:flex-start;justify-content:space-between}
+.mh-title{font-size:19px;font-weight:700;letter-spacing:-.3px}
+.mh-sub{font-size:11.5px;color:var(--mu);margin-top:3px}
+.mh-meta{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--mu);text-align:right;line-height:1.8}
+#main-body{flex:1;overflow-y:auto;padding:22px 32px;display:flex;flex-direction:column;gap:18px}
+.empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--mu);text-align:center;gap:12px;padding:80px 0}
+.empty .ico{font-size:44px;opacity:.18}.empty .t{font-size:14px}.empty .s{font-size:12px;opacity:.4}
+#chart-div{width:100%}
+#leg-main{display:flex;flex-wrap:wrap;gap:9px;padding-bottom:8px}
+.lm-item{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--di)}
+.lm-dot{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+#tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+thead th{background:var(--red);color:#fff;padding:10px 13px;text-align:left;font-size:11.5px;font-weight:600;white-space:nowrap;cursor:pointer;user-select:none}
+thead th:hover{background:#bf1c18}
+tbody td{padding:9px 13px;border-bottom:1px solid var(--bd);color:var(--di)}
+tbody tr:hover td{background:var(--sf2);color:var(--tx)}
+
+/* PiP FLOAT */
+#pip{position:fixed;bottom:26px;right:28px;width:290px;background:var(--sf);border:1px solid var(--bd3);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.75),0 0 0 1px var(--bd);z-index:9999;display:none;flex-direction:column;overflow:hidden;transition:width .28s ease,box-shadow .22s;cursor:default}
+#pip:hover{box-shadow:0 14px 48px rgba(0,0,0,.85),0 0 0 1px var(--red)}
+#pip.big{width:440px}
+.pip-head{display:flex;align-items:center;justify-content:space-between;padding:9px 13px;border-bottom:1px solid var(--bd);background:var(--sf2);flex-shrink:0}
+.pip-left{display:flex;align-items:center;gap:8px}
+.pip-dot{width:7px;height:7px;border-radius:50%;background:var(--red);box-shadow:0 0 8px var(--rglow);animation:dpulse 2s ease-in-out infinite}
+@keyframes dpulse{0%,100%{opacity:1}50%{opacity:.3}}
+.pip-title{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:var(--di);letter-spacing:1px}
+.pip-acts{display:flex;align-items:center;gap:4px}
+.pip-btn{background:none;border:1px solid transparent;color:var(--mu);cursor:pointer;font-size:13px;padding:3px 6px;width:auto;border-radius:4px;transition:.18s;line-height:1}
+.pip-btn:hover{background:var(--sf3);color:var(--tx);border-color:var(--bd2)}
+#pip-chart{width:100%;height:150px;transition:height .28s ease}
+#pip.big #pip-chart{height:240px}
+.pip-foot{display:flex;align-items:center;justify-content:space-between;padding:7px 13px;border-top:1px solid var(--bd);font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--mu);background:var(--sf2);flex-shrink:0}
+.pip-foot .hi{color:var(--bl)}
+</style>
+</head>
+<body>
+
+<div id="sb">
+  <div class="sb-head">
+    <div class="sb-logo">Riva<span>Plotter</span></div>
+    <div class="sb-tag">Barras Horizontais · Compostas</div>
+    <button class="back" onclick="location.href='index.html'">← Voltar ao Menu</button>
+  </div>
+  <div class="tab-row">
+    <button class="tab-btn on" id="tb-cfg" onclick="goTab('cfg')">⚙️ Configurar</button>
+    <button class="tab-btn"   id="tb-prv" onclick="goTab('prv')">📊 Prévia</button>
+  </div>
+  <div class="tab-hr"></div>
+
+  <!-- ─── CONFIGURAR ─── -->
+  <div class="panel on" id="panel-cfg">
+
+    <div class="card">
+      <div class="card-head">
+        <span class="ico">📂</span>
+        <span class="label">Planilha de Dados</span>
+        <span class="badge wait" id="badge-up">AGUARDANDO</span>
+      </div>
+      <div class="card-body">
+        <div class="upz" id="upz">
+          <input type="file" id="finput" accept=".csv,.xlsx,.xls" onchange="loadFile(this.files[0])">
+          <div class="ico">📂</div>
+          <div class="upz-main">Arraste ou clique aqui</div>
+          <div class="upz-sub">Planilha com dados comparativos</div>
+          <div class="upz-fmt">.CSV &nbsp;·&nbsp; .XLSX &nbsp;·&nbsp; .XLS</div>
+        </div>
+        <div id="file-ok" style="display:none"></div>
+        <div id="mini-tbl" style="display:none"></div>
+      </div>
+    </div>
+
+    <div class="card" id="card-map" style="opacity:.38;pointer-events:none">
+      <div class="card-head"><span class="ico">🔗</span><span class="label">Mapear Colunas</span></div>
+      <div class="card-body">
+        <div class="frow">
+          <div class="fl"><span class="lbl">Rótulos &mdash; Eixo Y</span><span class="tag-r">REQUIRED</span></div>
+          <select id="sel-L" onchange="onLabel();autoRender()">
+            <option value="">— Selecione a coluna —</option>
+          </select>
+          <div id="hint-L"></div>
+        </div>
+
+        <div class="frow" style="margin-top:14px">
+          <div class="ser-head">
+            <span class="lbl">Séries de Valores</span>
+            <button class="add-btn" onclick="addSer()">+ Série</button>
+          </div>
+          <div id="ser-list"></div>
+          <div id="ser-hint" style="font-size:10.5px;color:var(--mu);margin-top:8px;line-height:1.6;display:none">
+            Cada série = um grupo de barras.<br>
+            <span style="color:var(--bl);font-family:'JetBrains Mono',monospace">Nome</span> = legenda do gráfico.
+          </div>
+        </div>
+
+        <div class="frow" style="margin-top:14px">
+          <div class="fl"><span class="lbl">Máx. de Linhas</span><span class="tag-o">OPCIONAL</span></div>
+          <input type="number" id="maxr" value="15" min="1" max="300" onchange="autoRender()">
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="card-opt" style="opacity:.38;pointer-events:none">
+      <div class="card-head"><span class="ico">🎨</span><span class="label">Personalizar</span></div>
+      <div class="card-body">
+        <div class="frow">
+          <div class="fl"><span class="lbl">Título</span><span class="tag-o">OPCIONAL</span></div>
+          <input type="text" id="opt-ti" placeholder="Ex: Comparativo de Desempenho" oninput="updateHeader();autoRender()">
+        </div>
+        <div class="frow">
+          <div class="fl"><span class="lbl">Subtítulo</span><span class="tag-o">OPCIONAL</span></div>
+          <input type="text" id="opt-su" placeholder="Ex: Q1 2025" oninput="updateHeader();autoRender()">
+        </div>
+        <div class="frow">
+          <div class="fl"><span class="lbl">Ordenação (1ª série)</span></div>
+          <select id="opt-so" onchange="autoRender()">
+            <option value="desc">Maior → Menor</option>
+            <option value="asc">Menor → Maior</option>
+            <option value="original">Ordem Original</option>
+            <option value="alpha">Alfabética (A→Z)</option>
+          </select>
+        </div>
+        <div class="frow">
+          <div class="fl"><span class="lbl">Modo das Barras</span></div>
+          <select id="opt-bm" onchange="autoRender()">
+            <option value="group">Agrupadas (lado a lado)</option>
+            <option value="overlay">Sobrepostas</option>
+          </select>
+        </div>
+        <div class="frow">
+          <div class="fl"><span class="lbl">Tema</span></div>
+          <select id="opt-th" onchange="autoRender()">
+            <option value="dark">Escuro</option>
+            <option value="light">Claro</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-main" id="btn-g" onclick="render()" disabled>📊 Gerar Gráfico</button>
+    <button class="btn-sec"  id="btn-s" onclick="salvar()" style="display:none">💾 Salvar como HTML</button>
+  </div>
+
+  <!-- ─── PRÉVIA ─── -->
+  <div class="panel" id="panel-prv">
+    <div class="prv-empty" id="prv-empty">
+      <div class="ico">📊</div>
+      <p>Nenhum gráfico ainda</p>
+      <small>Configure e o gráfico aparece aqui automaticamente</small>
+    </div>
+    <div id="prv-content" style="display:none">
+      <div id="tab-chart-wrap"><div id="tab-chart"></div></div>
+      <div id="prv-leg" class="leg-strip"></div>
+      <div class="stat-grid" id="stat-grid"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+  <div id="main-head">
+    <div>
+      <div class="mh-title" id="mh-title">Barras Horizontais Compostas</div>
+      <div class="mh-sub"   id="mh-sub">Carregue uma planilha para começar</div>
+    </div>
+    <div class="mh-meta" id="mh-meta"></div>
+  </div>
+  <div id="main-body">
+    <div class="empty" id="empty">
+      <div class="ico">📊</div>
+      <div class="t">Nenhum gráfico gerado ainda</div>
+      <div class="s">Configure as séries → o gráfico atualiza em tempo real</div>
+    </div>
+    <div id="leg-main" style="display:none"></div>
+    <div id="chart-div" style="display:none"></div>
+    <div id="tbl-wrap"  style="display:none"><div id="tbl"></div></div>
+  </div>
+</div>
+
+<!-- PiP FLOAT -->
+<div id="pip">
+  <div class="pip-head">
+    <div class="pip-left">
+      <div class="pip-dot"></div>
+      <span class="pip-title">AO VIVO</span>
+    </div>
+    <div class="pip-acts">
+      <button class="pip-btn" id="pip-exp-btn" onclick="togglePip()" title="Expandir">⛶</button>
+      <button class="pip-btn" onclick="closePip()" title="Fechar">✕</button>
+    </div>
+  </div>
+  <div id="pip-chart"></div>
+  <div class="pip-foot">
+    <span id="pip-info">—</span>
+    <span class="hi" id="pip-ser">—</span>
+  </div>
+</div>
+
+<script>
+let rows=[], cols=[], scnt=0, snap=null;
+let pipBig=false, pipOpen=false, rTimer=null;
+
+const PAL=['#e42824','#636EFA','#00CC96','#AB63FA','#FFA15A','#19D3F3','#FF6692','#B6E880'];
+const TEMAS={
+  dark: {bg:'#0c0c0c',paper:'#0c0c0c',font:'#f0f0f0',grid:'#1c1c1c',mu:'#454545'},
+  light:{bg:'#f4f4f9',paper:'#f4f4f9',font:'#1a1a1a',grid:'#e2e2e2',mu:'#aaa'},
+};
+
+function goTab(t){
+  ['cfg','prv'].forEach(k=>{
+    document.getElementById('tb-'+k).classList.toggle('on',k===t);
+    document.getElementById('panel-'+k).classList.toggle('on',k===t);
+  });
+  if(t==='prv'&&snap) drawTabChart();
+}
+
+const upz=document.getElementById('upz');
+upz.addEventListener('dragover', e=>{e.preventDefault();upz.classList.add('dov')});
+upz.addEventListener('dragleave',()=>upz.classList.remove('dov'));
+upz.addEventListener('drop',     e=>{e.preventDefault();upz.classList.remove('dov');e.dataTransfer.files[0]&&loadFile(e.dataTransfer.files[0])});
+
+async function loadFile(f){
+  if(!f) return;
+  const ext=f.name.split('.').pop().toLowerCase();
+  try{
+    if(ext==='csv'){
+      const r=Papa.parse(await f.text(),{header:true,skipEmptyLines:true,dynamicTyping:true});
+      rows=r.data; cols=r.meta.fields||[];
+    } else if(['xlsx','xls'].includes(ext)){
+      const wb=XLSX.read(await f.arrayBuffer(),{type:'array'});
+      const j=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
+      rows=j; cols=Object.keys(j[0]||{});
+    } else { alert('Use .csv, .xlsx ou .xls'); return; }
+
+    const b=document.getElementById('badge-up');
+    b.textContent='CARREGADO'; b.className='badge ok';
+
+    upz.style.display='none';
+    const fo=document.getElementById('file-ok');
+    fo.style.display='block';
+    fo.innerHTML=`<div class="file-pill">
+      <span style="font-size:18px">✅</span>
+      <div style="flex:1;min-width:0">
+        <div class="name">${f.name}</div>
+        <div class="info">${rows.length} linhas · ${cols.length} colunas</div>
+      </div>
+      <button class="pill-rm" onclick="resetFile()">✕</button>
+    </div>`;
+
+    buildMiniTable();
+    document.getElementById('card-map').style.cssText='';
+    document.getElementById('card-opt').style.cssText='';
+    populate();
+  } catch(e){ alert('Erro: '+e.message); }
+}
+
+function buildMiniTable(){
+  const vc=cols.slice(0,4), vr=rows.slice(0,4);
+  const cw=`repeat(${vc.length},1fr)`;
+  let h=`<div class="mini-table"><div class="mtr" style="grid-template-columns:${cw}">${vc.map(c=>`<div class="mtd h">${c}</div>`).join('')}</div>`;
+  vr.forEach(r=>{h+=`<div class="mtr" style="grid-template-columns:${cw}">${vc.map(c=>`<div class="mtd">${r[c]??''}</div>`).join('')}</div>`;});
+  const el=document.getElementById('mini-tbl');
+  el.innerHTML=h+'</div>'; el.style.display='block';
+}
+
+function resetFile(){
+  rows=[]; cols=[]; scnt=0; snap=null;
+  upz.style.display='block';
+  document.getElementById('file-ok').style.display='none';
+  document.getElementById('mini-tbl').style.display='none';
+  document.getElementById('finput').value='';
+  const b=document.getElementById('badge-up');b.textContent='AGUARDANDO';b.className='badge wait';
+  document.getElementById('card-map').style.cssText='opacity:.38;pointer-events:none';
+  document.getElementById('card-opt').style.cssText='opacity:.38;pointer-events:none';
+  document.getElementById('btn-g').disabled=true;
+  document.getElementById('btn-s').style.display='none';
+  closePip();
+  document.getElementById('prv-empty').style.display='flex';
+  document.getElementById('prv-content').style.display='none';
+  document.getElementById('empty').style.display='flex';
+  document.getElementById('chart-div').style.display='none';
+  document.getElementById('tbl-wrap').style.display='none';
+  document.getElementById('leg-main').style.display='none';
+  document.getElementById('ser-list').innerHTML='';
+  document.getElementById('ser-hint').style.display='none';
+}
+
+function populate(){
+  const sl=document.getElementById('sel-L');
+  sl.innerHTML='<option value="">— Selecione a coluna —</option>';
+  cols.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;sl.appendChild(o);});
+  sl.value=cols[0]||''; onLabel();
+
+  scnt=0; document.getElementById('ser-list').innerHTML='';
+  const num=cols.filter((c,i)=>i>0&&typeof rows[0]?.[c]==='number');
+  const toAdd=num.slice(0,Math.min(3,num.length));
+  toAdd.forEach((c,i)=>addSer(c,c,PAL[i+1]));
+  if(toAdd.length===0) addSer('','Série 1',PAL[1]);
+  document.getElementById('ser-hint').style.display='block';
+  chkReady(); autoRender();
+}
+
+function onLabel(){
+  const lc=document.getElementById('sel-L').value;
+  const el=document.getElementById('hint-L');
+  if(lc&&rows.length){
+    const ex=rows.slice(0,3).map(r=>r[lc]).filter(v=>v!=null&&v!=='').join(', ');
+    el.innerHTML=`<span class="hint">ex: ${ex}</span>`;
+  } else el.innerHTML='';
+  chkReady();
+}
+
+function addSer(defCol='',defName='',defColor=null){
+  scnt++;
+  const id=scnt, color=defColor||PAL[(id-1)%PAL.length];
+  const div=document.createElement('div');
+  div.className='ser-row'; div.id='sr-'+id;
+  div.innerHTML=`
+    <input type="color" class="sc" value="${color}" id="sc-${id}" oninput="autoRender()">
+    <select class="ss" id="ss-${id}" onchange="chkReady();autoRender()">
+      <option value="">— Coluna —</option>
+      ${cols.map(c=>`<option value="${c}"${c===defCol?' selected':''}>${c}</option>`).join('')}
+    </select>
+    <input type="text" class="sn" id="sn-${id}" placeholder="Nome" value="${defName}" oninput="autoRender()">
+    <button class="sr-rm" onclick="rmSer(${id})">✕</button>`;
+  document.getElementById('ser-list').appendChild(div);
+  document.getElementById('ser-hint').style.display='block';
+  chkReady(); autoRender();
+}
+
+function rmSer(id){
+  const el=document.getElementById('sr-'+id);
+  if(el) el.remove();
+  chkReady(); autoRender();
+}
+
+function getSeries(){
+  const res=[];
+  document.querySelectorAll('.ser-row').forEach(r=>{
+    const id=r.id.replace('sr-','');
+    const col=document.getElementById('ss-'+id)?.value;
+    const name=document.getElementById('sn-'+id)?.value||col;
+    const color=document.getElementById('sc-'+id)?.value;
+    if(col) res.push({col,name,color});
+  });
+  return res;
+}
+
+function chkReady(){
+  const lc=document.getElementById('sel-L').value;
+  document.getElementById('btn-g').disabled=!(lc&&getSeries().length>0);
+}
+
+/* AUTO RENDER */
+function autoRender(){
+  if(!canRender()) return;
+  clearTimeout(rTimer);
+  rTimer=setTimeout(()=>render(true),180);
+}
+
+function canRender(){
+  const lc=document.getElementById('sel-L').value;
+  return lc&&getSeries().length>0;
+}
+
+/* BUILD DATA */
+function buildData(){
+  const lc  =document.getElementById('sel-L').value;
+  const ser  =getSeries();
+  const maxr =parseInt(document.getElementById('maxr').value)||15;
+  const so   =document.getElementById('opt-so').value;
+  const bm   =document.getElementById('opt-bm').value;
+  const tema =TEMAS[document.getElementById('opt-th').value];
+
+  let d=rows.filter(r=>r[lc]!=null&&r[lc]!=='');
+  if(ser.length>0){
+    const sc=ser[0].col;
+    if(so==='desc')    d.sort((a,b)=>Number(b[sc])-Number(a[sc]));
+    else if(so==='asc')d.sort((a,b)=>Number(a[sc])-Number(b[sc]));
+    else if(so==='alpha') d.sort((a,b)=>String(a[lc]).localeCompare(String(b[lc])));
+  }
+  d=d.slice(0,maxr);
+  return {d,lc,ser,bm,tema};
+}
+
+function makeTracesLayout(d,lc,ser,bm,tema,height,opts={}){
+  const {textSize=11,showText=true}=opts;
+  const labels=d.map(r=>String(r[lc])).reverse();
+  const traces=ser.map(s=>{
+    const vals=d.map(r=>Number(r[s.col])||0).reverse();
+    return{
+      name:s.name||s.col, x:vals, y:labels,
+      type:'bar', orientation:'h',
+      marker:{color:s.color,opacity:bm==='overlay'?0.62:0.88},
+      text: showText?vals.map(v=>fmtN(v)):[],
+      textposition:'inside', insidetextanchor:'end',
+      textfont:{size:textSize,color:'#fff',family:'Poppins'},
+      hovertemplate:`<b>%{y}</b><br>${s.name}: <b>%{x}</b><extra></extra>`,
+    };
+  });
+  const ns=ser.length;
+  const bh=ns<=2?54:ns<=4?44:34;
+  const layout={
+    height: height||Math.max(360,d.length*(bh*ns+18)+80),
+    barmode:bm,
+    xaxis:{gridcolor:tema.grid,tickfont:{color:tema.mu,size:10,family:'JetBrains Mono'}},
+    yaxis:{tickfont:{color:tema.font,size:11,family:'Poppins'},automargin:true},
+    paper_bgcolor:tema.paper, plot_bgcolor:tema.bg,
+    font:{family:'Poppins',color:tema.font},
+    margin:{l:8,r:18,t:14,b:36},
+    showlegend:false, bargap:0.14, bargroupgap:0.06,
+  };
+  return {traces,layout,labels};
+}
+
+/* RENDER PRINCIPAL */
+function render(silent=false){
+  if(!canRender()) return;
+  const {d,lc,ser,bm,tema}=buildData();
+  snap={d,lc,ser,bm,tema};
+
+  const {traces,layout}=makeTracesLayout(d,lc,ser,bm,tema,null,{textSize:11});
+
+  updateHeader();
+  document.getElementById('mh-meta').innerHTML=`${ser.length} séries<br>${d.length} linhas`;
+
+  /* legend main */
+  const lm=document.getElementById('leg-main');
+  lm.style.display='flex';
+  lm.innerHTML=ser.map(s=>`<div class="lm-item"><div class="lm-dot" style="background:${s.color}"></div><span>${s.name}</span></div>`).join('');
+
+  document.getElementById('empty').style.display='none';
+  document.getElementById('chart-div').style.display='block';
+  document.getElementById('tbl-wrap').style.display='block';
+  Plotly.react('chart-div',traces,layout,{responsive:true});
+
+  buildTable(d,lc,ser);
+  document.getElementById('btn-s').style.display='block';
+
+  drawPip();
+  if(document.getElementById('panel-prv').classList.contains('on')) drawTabChart();
+}
+
+function updateHeader(){
+  const ti=document.getElementById('opt-ti').value||'Barras Horizontais Compostas';
+  const su=document.getElementById('opt-su').value||(snap?`${snap.ser.length} séries · ${snap.d.length} itens`:'Carregue uma planilha para começar');
+  document.getElementById('mh-title').textContent=ti;
+  document.getElementById('mh-sub').textContent=su;
+}
+
+/* TAB CHART */
+function drawTabChart(){
+  if(!snap) return;
+  const {d,lc,ser,bm,tema}=snap;
+  const ns=ser.length;
+  const h=Math.max(180, d.length*(20*ns+10)+40);
+  const {traces,layout}=makeTracesLayout(d,lc,ser,bm,tema,h,{textSize:8,showText:false});
+  layout.margin={l:6,r:6,t:6,b:20};
+  layout.xaxis.tickfont={size:8,color:tema.mu,family:'JetBrains Mono'};
+  layout.yaxis.tickfont={size:8,color:tema.font,family:'Poppins'};
+
+  document.getElementById('prv-empty').style.display='none';
+  document.getElementById('prv-content').style.display='block';
+  Plotly.react('tab-chart',traces,layout,{responsive:true,staticPlot:true});
+
+  /* legend */
+  document.getElementById('prv-leg').innerHTML=ser.map(s=>`<div class="leg-item"><div class="leg-dot" style="background:${s.color}"></div><span>${s.name}</span></div>`).join('');
+
+  /* stats from first series */
+  const vals=d.map(r=>Number(r[ser[0].col])||0);
+  const mx=Math.max(...vals), mn=Math.min(...vals);
+  const avg=vals.reduce((a,b)=>a+b,0)/vals.length;
+  document.getElementById('stat-grid').innerHTML=`
+    <div class="stat-c"><div class="stat-lbl">Máximo</div><div class="stat-val r">${fmtN(mx)}</div></div>
+    <div class="stat-c"><div class="stat-lbl">Mínimo</div><div class="stat-val">${fmtN(mn)}</div></div>
+    <div class="stat-c"><div class="stat-lbl">Média</div><div class="stat-val">${fmtN(avg)}</div></div>
+    <div class="stat-c"><div class="stat-lbl">Séries</div><div class="stat-val b">${ser.length}</div></div>`;
+}
+
+/* PiP */
+function drawPip(){
+  if(!snap) return;
+  const {d,lc,ser,bm,tema}=snap;
+  const pip=document.getElementById('pip');
+  pip.style.display='flex'; pipOpen=true;
+
+  const labels=d.map(r=>String(r[lc])).reverse();
+  const traces=ser.map(s=>({
+    name:s.name, x:d.map(r=>Number(r[s.col])||0).reverse(), y:labels,
+    type:'bar', orientation:'h',
+    marker:{color:s.color,opacity:bm==='overlay'?0.6:0.86},
+    hoverinfo:'none', text:[], width:0.65,
+  }));
+  const h=pipBig?240:150;
+  const layout={
+    height:h, barmode:bm,
+    xaxis:{visible:false},
+    yaxis:{tickfont:{color:'#666',size:8.5,family:'Poppins'},automargin:true},
+    paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+    margin:{l:4,r:6,t:4,b:4},
+    showlegend:false, bargap:0.14, bargroupgap:0.06,
+  };
+  Plotly.react('pip-chart',traces,layout,{responsive:true,staticPlot:true,displayModeBar:false});
+  document.getElementById('pip-info').textContent=`${d.length} linhas`;
+  document.getElementById('pip-ser').textContent=`${ser.length} séries`;
+}
+
+function togglePip(){
+  pipBig=!pipBig;
+  document.getElementById('pip').classList.toggle('big',pipBig);
+  document.getElementById('pip-exp-btn').textContent=pipBig?'⊡':'⛶';
+  if(snap) drawPip();
+}
+
+function closePip(){
+  pipOpen=false;
+  document.getElementById('pip').style.display='none';
+}
+
+/* TABLE */
+function buildTable(d,lc,ser){
+  const cs=[lc,...ser.map(s=>s.col)];
+  const ns=[lc,...ser.map(s=>s.name)];
+  let h='<table><thead><tr>'+ns.map(c=>`<th>${c}</th>`).join('')+'</tr></thead><tbody>';
+  d.forEach(r=>{
+    h+='<tr>'+cs.map(c=>`<td>${r[c]!=null?(typeof r[c]==='number'?fmtN(r[c]):r[c]):'—'}</td>`).join('')+'</tr>';
+  });
+  document.getElementById('tbl').innerHTML=h+'</tbody></table>';
+}
+
+function salvar(){
+  const b=new Blob(['<!DOCTYPE html>\n<html lang="pt-BR">\n'+document.documentElement.cloneNode(true).innerHTML+'\n</html>'],{type:'text/html;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(b);
+  a.download=((document.getElementById('opt-ti').value.trim()||'GRAFICO').toUpperCase().replace(/\s+/g,'_'))+'_barras_h_compostas.html';
+  a.click();
+}
+
+function fmtN(n){
+  if(n>=1e9) return (n/1e9).toFixed(2)+'B';
+  if(n>=1e6) return (n/1e6).toFixed(2)+'M';
+  if(n>=1e3) return n.toLocaleString('pt-BR');
+  return Number(n).toFixed(2).replace(/\.00$/,'');
+}
+
+window.addEventListener('resize',()=>{
+  if(snap){
+    Plotly.Plots.resize(document.getElementById('chart-div'));
+    if(pipOpen) Plotly.Plots.resize(document.getElementById('pip-chart'));
+  }
+});
+</script>
+</body>
+</html>

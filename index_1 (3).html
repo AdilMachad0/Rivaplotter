@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RivaPlotter — Adrenaline</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --red: #e42824; --red-dim: rgba(228,40,36,0.12);
+            --bg: #0d0d0d; --surface: #161616; --surface2: #1e1e1e;
+            --border: #2a2a2a; --border2: #333;
+            --text: #fff; --muted: #666; --dim: #999;
+            --green: #00CC96; --blue: #636EFA; --purple: #AB63FA; --orange: #FFA15A;
+        }
+
+        body { font-family: 'Poppins', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
+
+        body::before {
+            content: ''; position: fixed; inset: 0;
+            background-image:
+                linear-gradient(rgba(228,40,36,0.025) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(228,40,36,0.025) 1px, transparent 1px);
+            background-size: 44px 44px; pointer-events: none; z-index: 0;
+        }
+        body::after {
+            content: ''; position: fixed; top: -200px; left: 50%; transform: translateX(-50%);
+            width: 900px; height: 450px;
+            background: radial-gradient(ellipse, rgba(228,40,36,0.1) 0%, transparent 68%);
+            pointer-events: none; z-index: 0;
+        }
+
+        .wrapper { position: relative; z-index: 1; max-width: 1380px; margin: 0 auto; padding: 0 44px 80px; }
+
+        /* HEADER */
+        header { display: flex; align-items: center; justify-content: space-between; padding: 38px 0 0; margin-bottom: 60px; }
+        .logo-block { display: flex; flex-direction: column; }
+        .logo-title { font-size: 46px; font-weight: 900; letter-spacing: -2px; line-height: 1; }
+        .logo-title span { color: var(--red); }
+        .logo-sub { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--red); letter-spacing: 4px; text-transform: uppercase; margin-top: 5px; }
+        .header-badge { display: flex; align-items: center; gap: 9px; background: var(--surface); border: 1px solid var(--border); padding: 10px 18px; border-radius: 6px; font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+        .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 2s ease-in-out infinite; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+        /* SECTION LABEL */
+        .sec { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; margin-top: 42px; }
+        .sec:first-of-type { margin-top: 0; }
+        .sec .line { flex: 1; height: 1px; background: linear-gradient(90deg, var(--border), transparent); }
+        .sec .tag { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 3px; color: var(--muted); text-transform: uppercase; white-space: nowrap; }
+
+        /* GRIDS */
+        .g3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; margin-bottom: 16px; }
+        .g4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin-bottom: 16px; }
+
+        /* CARD */
+        .card {
+            background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+            overflow: hidden; cursor: pointer; text-decoration: none; color: inherit;
+            display: flex; flex-direction: column;
+            transition: transform .22s ease, border-color .22s, box-shadow .22s;
+            animation: cin .5s ease both;
+        }
+        .card:nth-child(1){animation-delay:.04s} .card:nth-child(2){animation-delay:.09s}
+        .card:nth-child(3){animation-delay:.14s} .card:nth-child(4){animation-delay:.19s}
+        .card:nth-child(5){animation-delay:.24s} .card:nth-child(6){animation-delay:.29s}
+        @keyframes cin { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+
+        .card:not(.off):hover { transform: translateY(-5px); border-color: var(--red); box-shadow: 0 12px 40px rgba(228,40,36,.2), 0 0 0 1px var(--red); }
+        .card:not(.off):hover .arr { transform: translateX(4px); color: var(--red); }
+        .card:not(.off):hover .ba rect,
+        .card:not(.off):hover .ba path { animation-play-state: running; }
+        .card:not(.off):hover svg path[stroke-dasharray] { animation-play-state: running; }
+        .off { opacity: .4; cursor: not-allowed; }
+
+        .ctop { display: flex; align-items: center; justify-content: space-between; padding: 13px 16px 0; }
+        .cat  { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; }
+
+        .bdg { font-size: 9px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; padding: 3px 8px; border-radius: 3px; font-family: 'JetBrains Mono', monospace; }
+        .ok   { background: rgba(0,204,150,.12); color: var(--green); border: 1px solid rgba(0,204,150,.28); }
+        .soon { background: rgba(255,161,90,.12); color: var(--orange); border: 1px solid rgba(255,161,90,.28); }
+
+        .cprev { width: 100%; height: 118px; padding: 10px 14px 6px; }
+        .cprev svg { width: 100%; height: 100%; }
+
+        /* SVG anims */
+        .ba rect, .ba path { animation-play-state: paused; animation-fill-mode: both; }
+        @keyframes gr  { from{transform:scaleX(0);transform-origin:left} to{transform:scaleX(1);transform-origin:left} }
+        @keyframes gu  { from{transform:scaleY(0);transform-origin:bottom} to{transform:scaleY(1);transform-origin:bottom} }
+        @keyframes ld  { from{stroke-dashoffset:300} to{stroke-dashoffset:0} }
+        @keyframes fp  { from{opacity:0;transform:scale(.5)} to{opacity:1;transform:scale(1)} }
+
+        .cbody { padding: 4px 16px 16px; flex: 1; display: flex; flex-direction: column; justify-content: space-between; }
+        .ctitle { font-size: 14px; font-weight: 700; line-height: 1.25; margin-bottom: 4px; }
+        .cdesc  { font-size: 11px; color: var(--muted); line-height: 1.6; margin-bottom: 12px; }
+        .cfoot  { display: flex; align-items: center; justify-content: space-between; }
+        .tags   { display: flex; gap: 5px; flex-wrap: wrap; }
+        .chip   { font-size: 9px; padding: 2px 7px; border-radius: 20px; background: var(--surface2); border: 1px solid var(--border); color: var(--dim); font-family: 'JetBrains Mono', monospace; }
+        .arr    { font-size: 16px; color: var(--muted); transition: transform .2s, color .2s; flex-shrink: 0; }
+
+        /* FOOTER */
+        footer { border-top: 1px solid var(--border); padding-top: 28px; margin-top: 10px; display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 11px; font-family: 'JetBrains Mono', monospace; }
+
+        @media(max-width:1100px) { .g4{grid-template-columns:repeat(2,1fr)} }
+        @media(max-width:900px)  { .g3,.g4{grid-template-columns:repeat(2,1fr)} .wrapper{padding:0 20px 60px} .logo-title{font-size:34px} }
+        @media(max-width:600px)  { .g3,.g4{grid-template-columns:1fr} header{flex-direction:column;align-items:flex-start;gap:16px} }
+
+        /* ===== menu: foco nas duas tarefas principais ===== */
+        .quick{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin:6px 0 4px}
+        .qbtn{display:flex;flex-direction:column;gap:4px;padding:18px 20px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:inherit;text-decoration:none;transition:transform .2s,border-color .2s,box-shadow .2s}
+        .qbtn:hover{transform:translateY(-3px);border-color:var(--red);box-shadow:0 10px 30px rgba(228,40,36,.15)}
+        .qbtn b{font-size:17px;font-weight:900;letter-spacing:-.4px}.qbtn small{color:#8a8a8a;font-size:12px}
+        .ptitle{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin:34px 0 14px}
+        .ptitle h2{font-size:22px;font-weight:900;letter-spacing:-.6px}.ptitle h2 span{color:var(--red)}.ptitle p{color:#8a8a8a;font-size:12.5px}
+        .card.feat{border-color:#3a1c1c}.card.feat .ctitle{font-size:17px}
+        .steps{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#8a8a8a;margin-top:6px}
+        .steps b{color:var(--red)}.steps i{font-style:normal;color:#444}
+        details.more{margin-top:46px;border-top:1px solid var(--border);padding-top:18px}
+        details.more summary{cursor:pointer;list-style:none;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#8a8a8a;padding:6px 0}
+        details.more summary::-webkit-details-marker{display:none}
+        details.more summary::before{content:'＋  '}details.more[open] summary::before{content:'－  '}
+        details.more summary:hover{color:#fff}
+        @media(max-width:900px){.quick{grid-template-columns:1fr}}
+    </style>
+</head>
+<body>
+<div class="wrapper">
+
+    <header>
+        <div class="logo-block">
+            <div class="logo-title">Riva<span>Plotter</span></div>
+            <div class="logo-sub">by Adrenaline</div>
+        </div>
+        <div class="header-badge"><span class="dot"></span>v2.2 &nbsp;·&nbsp; O que você quer fazer hoje?</div>
+    </header>
+
+    <div class="quick">
+        <a class="qbtn" href="#hardware"><b>🖥️ Custo e desempenho de hardware</b><small>Planilha de testes + preços → gráfico pronto para publicar</small></a>
+        <a class="qbtn" href="#logs"><b>📈 Plotagem de logs</b><small>Log .HML / .CSV do MSI Afterburner → linhas de framerate e sensores</small></a>
+    </div>
+
+    <!-- ══ HARDWARE ══ -->
+    <div class="ptitle" id="hardware"><h2>Custo e desempenho de <span>hardware</span></h2><p>Escolha o que quer comparar</p></div>
+    <div class="g3">
+        <a class="card feat" href="app_barras_gpu.html">
+            <div class="ctop"><span class="cat">Horizontal · Vertical · Benchmark</span><span class="bdg ok">Disponível</span></div>
+            <div class="cprev">
+                <svg viewBox="0 0 260 96" xmlns="http://www.w3.org/2000/svg" class="ba">
+                    <line x1="54" y1="4"  x2="252" y2="4"  stroke="#222" stroke-width="1"/>
+                    <line x1="54" y1="26" x2="252" y2="26" stroke="#222" stroke-width="1"/>
+                    <line x1="54" y1="48" x2="252" y2="48" stroke="#222" stroke-width="1"/>
+                    <line x1="54" y1="70" x2="252" y2="70" stroke="#222" stroke-width="1"/>
+                    <line x1="54" y1="90" x2="252" y2="90" stroke="#222" stroke-width="1"/>
+                    <text x="50" y="18" text-anchor="end" fill="#444" font-size="8" font-family="JetBrains Mono">RTX 5090</text>
+                    <text x="50" y="40" text-anchor="end" fill="#444" font-size="8" font-family="JetBrains Mono">RX 9070 XT</text>
+                    <text x="50" y="62" text-anchor="end" fill="#444" font-size="8" font-family="JetBrains Mono">RTX 5070</text>
+                    <text x="50" y="83" text-anchor="end" fill="#444" font-size="8" font-family="JetBrains Mono">RX 7800 XT</text>
+                    <rect x="54" y="7"  width="192" height="13" rx="2" fill="#e42824" style="animation:gr .5s .05s ease both"/>
+                    <rect x="54" y="29" width="146" height="13" rx="2" fill="#636EFA" style="animation:gr .5s .12s ease both"/>
+                    <rect x="54" y="51" width="122" height="13" rx="2" fill="#AB63FA" style="animation:gr .5s .19s ease both"/>
+                    <rect x="54" y="73" width="96"  height="13" rx="2" fill="#00CC96" style="animation:gr .5s .26s ease both"/>
+                </svg>
+            </div>
+            <div class="cbody">
+                <div><div class="ctitle">Performance e custo de Hardware</div><div class="cdesc">Compare <b>desempenho e custo por FPS</b>. Importa a planilha de testes e o CSV de preços, escolha jogo e resolução e exporte o gráfico pronto.</div></div>
+                <div class="steps"><span><b>1</b> Planilha de testes</span><i>→</i><span><b>2</b> Base de preços</span><i>→</i><span><b>3</b> Jogo e resolução</span><i>→</i><span><b>4</b> Exportar</span></div>
+                <div class="cfoot"><div class="tags"><span class="chip">XLSX</span><span class="chip">preços CSV</span><span class="chip">jogo × resolução</span></div><span class="arr">→</span></div>
+            </div>
+        </a>
+        <a class="card feat" href="app_desempenho_gpu.html">
+            <div class="ctop"><span class="cat">Horizontal · Vertical · Só desempenho</span><span class="bdg ok">Novo</span></div>
+            <div class="cprev">
+                <svg viewBox="0 0 260 96" xmlns="http://www.w3.org/2000/svg" class="ba">
+                    <line x1="54" y1="4" x2="252" y2="4" stroke="#222"/><line x1="54" y1="48" x2="252" y2="48" stroke="#222"/><line x1="54" y1="90" x2="252" y2="90" stroke="#222"/>
+                    <text x="50" y="18" text-anchor="end" fill="#444" font-size="8" font-family="JetBrains Mono">RTX 5090</text>
+                    <text x="50" y="40" text-anchor="end" fill="#444" font-size="8" font-family="JetBrains Mono">RTX 5080</text>
+                    <text x="50" y="62" text-anchor="end" fill="#444" font-size="8" font-family="JetBrains Mono">RX 9070 XT</text>
+                    <text x="50" y="83" text-anchor="end" fill="#444" font-size="8" font-family="JetBrains Mono">RTX 5070</text>
+                    <rect x="54" y="7" width="196" height="13" rx="2" fill="#636EFA" style="animation:gr .5s .05s ease both"/>
+                    <rect x="54" y="29" width="160" height="13" rx="2" fill="#636EFA" opacity=".85" style="animation:gr .5s .12s ease both"/>
+                    <rect x="54" y="51" width="132" height="13" rx="2" fill="#636EFA" opacity=".7" style="animation:gr .5s .19s ease both"/>
+                    <rect x="54" y="73" width="104" height="13" rx="2" fill="#636EFA" opacity=".55" style="animation:gr .5s .26s ease both"/>
+                </svg>
+            </div>
+            <div class="cbody">
+                <div><div class="ctitle">Somente Desempenho</div><div class="cdesc">Só a planilha de testes, <b>sem custo</b>. Compare o desempenho das placas por jogo e resolução e exporte o gráfico.</div></div>
+                <div class="steps"><span><b>1</b> Planilha de testes</span><i>→</i><span><b>2</b> Jogo e resolução</span><i>→</i><span><b>3</b> Exportar</span></div>
+                <div class="cfoot"><div class="tags"><span class="chip">XLSX</span><span class="chip">sem preços</span><span class="chip">jogo × resolução</span></div><span class="arr">→</span></div>
+            </div>
+        </a>
+        <a class="card feat" href="historico-precos.html">
+            <div class="ctop"><span class="cat">Linhas · Barras · Preços</span><span class="bdg ok">Disponível</span></div>
+            <div class="cprev">
+                <svg viewBox="0 0 260 96" xmlns="http://www.w3.org/2000/svg">
+                    <line x1="8" y1="20" x2="252" y2="20" stroke="#1e1e1e" stroke-width="1"/>
+                    <line x1="8" y1="50" x2="252" y2="50" stroke="#1e1e1e" stroke-width="1"/>
+                    <line x1="8" y1="78" x2="252" y2="78" stroke="#1e1e1e" stroke-width="1"/>
+                    <path d="M8,64 L30,60 L52,50 L74,54 L96,40 L118,44 L140,30 L162,36 L184,26 L206,32 L228,22 L252,28" fill="none" stroke="#e42824" stroke-width="2.5" stroke-dasharray="300" stroke-dashoffset="300" style="animation:ld .8s .1s ease forwards"/>
+                    <path d="M8,84 L30,80 L52,76 L74,78 L96,70 L118,72 L140,64 L162,66 L184,58 L206,62 L228,54 L252,56" fill="none" stroke="#00CC96" stroke-width="2" stroke-dasharray="300" stroke-dashoffset="300" style="animation:ld .8s .3s ease forwards"/>
+                </svg>
+            </div>
+            <div class="cbody">
+                <div><div class="ctitle">Somente Preços</div><div class="cdesc">Só preços, a partir do CSV. <b>Linhas</b>: evolução mês a mês. <b>Barras</b>: média de todos os preços registrados, com os mesmos seletores.</div></div>
+                <div class="steps"><span><b>1</b> CSV de preços</span><i>→</i><span><b>2</b> Escolha as placas</span><i>→</i><span><b>3</b> Linhas ou barras</span></div>
+                <div class="cfoot"><div class="tags"><span class="chip">CSV mensal</span><span class="chip">linhas</span><span class="chip">barras · média</span></div><span class="arr">→</span></div>
+            </div>
+        </a>
+    </div>
+
+    <!-- ══ LOGS ══ -->
+    <div class="ptitle" id="logs"><h2>Plotagem de <span>logs</span></h2><p>Gráficos a partir dos logs de monitoramento</p></div>
+    <div class="g3">
+        <a class="card feat" href="app_linhas.html">
+            <div class="ctop"><span class="cat">Logs · Framerate · Sensores</span><span class="bdg ok">Disponível</span></div>
+            <div class="cprev">
+                <svg viewBox="0 0 260 96" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="gl1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#e42824" stop-opacity=".3"/><stop offset="100%" stop-color="#e42824" stop-opacity="0"/></linearGradient>
+                        <linearGradient id="gl2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#636EFA" stop-opacity=".2"/><stop offset="100%" stop-color="#636EFA" stop-opacity="0"/></linearGradient>
+                    </defs>
+                    <line x1="8" y1="20" x2="252" y2="20" stroke="#1e1e1e" stroke-width="1"/>
+                    <line x1="8" y1="50" x2="252" y2="50" stroke="#1e1e1e" stroke-width="1"/>
+                    <line x1="8" y1="78" x2="252" y2="78" stroke="#1e1e1e" stroke-width="1"/>
+                    <path d="M8,70 C28,55 52,36 82,30 C112,24 136,41 160,34 C186,27 220,16 252,20 L252,92 L8,92Z" fill="url(#gl1)"/>
+                    <path d="M8,70 C28,55 52,36 82,30 C112,24 136,41 160,34 C186,27 220,16 252,20" fill="none" stroke="#e42824" stroke-width="2.5" stroke-dasharray="300" stroke-dashoffset="300" style="animation:ld .8s .1s ease forwards"/>
+                    <path d="M8,84 C28,78 52,68 82,64 C112,60 136,68 160,62 C186,56 220,46 252,50 L252,92 L8,92Z" fill="url(#gl2)"/>
+                    <path d="M8,84 C28,78 52,68 82,64 C112,60 136,68 160,62 C186,56 220,46 252,50" fill="none" stroke="#636EFA" stroke-width="2" stroke-dasharray="300" stroke-dashoffset="300" style="animation:ld .8s .3s ease forwards"/>
+                </svg>
+            </div>
+            <div class="cbody">
+                <div><div class="ctitle">Plotagem de Logs</div><div class="cdesc">Framerate ao longo do tempo. Importa logs .HML/.CSV do MSI Afterburner com múltiplos sensores.</div></div>
+                <div class="steps"><span><b>1</b> Exporte o log</span><i>→</i><span><b>2</b> Escolha os sensores</span><i>→</i><span><b>3</b> Exportar</span></div>
+                <div class="cfoot"><div class="tags"><span class="chip">log .hml</span><span class="chip">framerate</span><span class="chip">sensores</span></div><span class="arr">→</span></div>
+            </div>
+        </a>
+    </div>
+
+    <!-- ══ OUTRAS FERRAMENTAS ══ -->
+    <details class="more">
+        <summary>Outras ferramentas de gráficos</summary>
+    <!-- ══ HORIZONTAL ══ -->
+    <div class="sec"><span class="tag">Barras Horizontais</span><div class="line"></div></div>
+    <div class="g3">
+
+        <!-- Simples -->
+        <a class="card" href="app_barras_h_simples.html">
+            <div class="ctop"><span class="cat">Horizontal · Simples</span><span class="bdg ok">Disponível</span></div>
+            <div class="cprev">
+                <svg viewBox="0 0 260 96" xmlns="http://www.w3.org/2000/svg" class="ba">
+                    <line x1="54" y1="4"  x2="252" y2="4"  stroke="#222" stroke-width="1"/>
+                    <line x1="54" y1="26" x2="252" y2="26" stroke="#222" stroke-width="1"/>
+                    <line x1="54" y1="48" x2="252" y2="48" stroke="#222" stroke-width="1"/>
+                    <line x1="54" y1="70" x2="252" y2="70" stroke="#222" stroke-width="1"/>
+                    <line x1="54" y1="90" x2="252" y2="90" stroke="#222" stroke-width="1"/>
+                    <text x="50" y="18" text-anchor="end" fill="#444" font-size="8" font-family="JetBrains Mono">RTX 4090</text>
+                    <text x="50" y="40" text-anchor="end" fill="#444" font-size="8" font-family="JetBrains Mono">RTX 4080</text>
+                    <text x="50" y="62" text-anchor="end" fill="#444" font-size="8" font-family="JetBrains Mono">RX 7900</text>
+                    <text x="50" y="83" text-anchor="end" fill="#444" font-size="8" font-family="JetBrains Mono">RTX 4070</text>
+                    <rect x="54" y="7"  width="188" height="13" rx="2" fill="#e42824" opacity=".92" style="animation:gr .5s .05s ease both"/>
+                    <rect x="54" y="29" width="150" height="13" rx="2" fill="#e42824" opacity=".72" style="animation:gr .5s .12s ease both"/>
+                    <rect x="54" y="51" width="118" height="13" rx="2" fill="#e42824" opacity=".54" style="animation:gr .5s .19s ease both"/>
+                    <rect x="54" y="73" width="88"  height="13" rx="2" fill="#e42824" opacity=".35" style="animation:gr .5s .26s ease both"/>
+                </svg>
+            </div>
+            <div class="cbody">
+                <div><div class="ctitle">Barras Horizontais Simples</div><div class="cdesc">Ranking com uma única métrica. Importa CSV ou Excel, mapeie as colunas e gere na hora.</div></div>
+                <div class="cfoot"><div class="tags"><span class="chip">CSV/XLSX</span><span class="chip">1 métrica</span><span class="chip">ranking</span></div><span class="arr">→</span></div>
+            </div>
+        </a>
+
+        <!-- Compostas -->
+        <a class="card" href="app_barras_h_compostas.html">
+            <div class="ctop"><span class="cat">Horizontal · Compostas</span><span class="bdg ok">Disponível</span></div>
+            <div class="cprev">
+                <svg viewBox="0 0 260 96" xmlns="http://www.w3.org/2000/svg" class="ba">
+                    <line x1="54" y1="4"  x2="252" y2="4"  stroke="#222" stroke-width="1"/>
+                    <line x1="54" y1="36" x2="252" y2="36" stroke="#222" stroke-width="1"/>
+                    <line x1="54" y1="66" x2="252" y2="66" stroke="#222" stroke-width="1"/>
+                    <line x1="54" y1="93" x2="252" y2="93" stroke="#222" stroke-width="1"/>
+                    <text x="50" y="22" text-anchor="end" fill="#444" font-size="8" font-family="JetBrains Mono">GPU A</text>
+                    <text x="50" y="54" text-anchor="end" fill="#444" font-size="8" font-family="JetBrains Mono">GPU B</text>
+                    <text x="50" y="82" text-anchor="end" fill="#444" font-size="8" font-family="JetBrains Mono">GPU C</text>
+                    <rect x="54" y="5"  width="180" height="8" rx="1" fill="#e42824" opacity=".9"  style="animation:gr .4s .05s ease both"/>
+                    <rect x="54" y="15" width="155" height="8" rx="1" fill="#636EFA" opacity=".8"  style="animation:gr .4s .10s ease both"/>
+                    <rect x="54" y="25" width="130" height="8" rx="1" fill="#00CC96" opacity=".7"  style="animation:gr .4s .15s ease both"/>
+                    <rect x="54" y="37" width="145" height="8" rx="1" fill="#e42824" opacity=".8"  style="animation:gr .4s .20s ease both"/>
+                    <rect x="54" y="47" width="124" height="8" rx="1" fill="#636EFA" opacity=".7"  style="animation:gr .4s .25s ease both"/>
+                    <rect x="54" y="57" width="104" height="8" rx="1" fill="#00CC96" opacity=".6"  style="animation:gr .4s .30s ease both"/>
+                    <rect x="54" y="67" width="115" height="8" rx="1" fill="#e42824" opacity=".68" style="animation:gr .4s .35s ease both"/>
+                    <rect x="54" y="77" width="96"  height="8" rx="1" fill="#636EFA" opacity=".58" style="animation:gr .4s .40s ease both"/>
+                    <rect x="54" y="87" width="80"  height="8" rx="1" fill="#00CC96" opacity=".48" style="animation:gr .4s .45s ease both"/>
+                </svg>
+            </div>
+            <div class="cbody">
+                <div><div class="ctitle">Barras Horizontais Compostas</div><div class="cdesc">Múltiplas colunas do CSV como séries agrupadas. Cada série ganha cor e nome próprios.</div></div>
+                <div class="cfoot"><div class="tags"><span class="chip">CSV/XLSX</span><span class="chip">multi-série</span><span class="chip">agrupado</span></div><span class="arr">→</span></div>
+            </div>
+        </a>
+
+        <!-- Linhas -->
+        
+
+    </div>
+
+    <!-- ══ VERTICAL ══ -->
+    <div class="sec"><span class="tag">Barras Verticais</span><div class="line"></div></div>
+    <div class="g4">
+
+        <!-- V Simples -->
+        <a class="card off" href="#" onclick="return false;">
+            <div class="ctop"><span class="cat">Vertical · Simples</span><span class="bdg soon">Em Breve</span></div>
+            <div class="cprev">
+                <svg viewBox="0 0 260 96" xmlns="http://www.w3.org/2000/svg" class="ba">
+                    <line x1="18" y1="8"  x2="244" y2="8"  stroke="#222" stroke-width="1"/>
+                    <line x1="18" y1="38" x2="244" y2="38" stroke="#222" stroke-width="1"/>
+                    <line x1="18" y1="68" x2="244" y2="68" stroke="#222" stroke-width="1"/>
+                    <line x1="18" y1="92" x2="244" y2="92" stroke="#222" stroke-width="1"/>
+                    <rect x="28"  y="10" width="30" height="82" rx="2" fill="#e42824" opacity=".9"  style="animation:gu .5s .05s ease both"/>
+                    <rect x="76"  y="22" width="30" height="70" rx="2" fill="#e42824" opacity=".74" style="animation:gu .5s .12s ease both"/>
+                    <rect x="124" y="38" width="30" height="54" rx="2" fill="#e42824" opacity=".56" style="animation:gu .5s .19s ease both"/>
+                    <rect x="172" y="55" width="30" height="37" rx="2" fill="#e42824" opacity=".40" style="animation:gu .5s .26s ease both"/>
+                    <rect x="212" y="70" width="30" height="22" rx="2" fill="#e42824" opacity=".26" style="animation:gu .5s .33s ease both"/>
+                </svg>
+            </div>
+            <div class="cbody">
+                <div><div class="ctitle">Barras Verticais Simples</div><div class="cdesc">Colunas verticais com uma métrica. Ideal para até 8 categorias lado a lado.</div></div>
+                <div class="cfoot"><div class="tags"><span class="chip">1 métrica</span><span class="chip">colunas</span></div><span class="arr">→</span></div>
+            </div>
+        </a>
+
+        <!-- V Compostas -->
+        <a class="card off" href="#" onclick="return false;">
+            <div class="ctop"><span class="cat">Vertical · Compostas</span><span class="bdg soon">Em Breve</span></div>
+            <div class="cprev">
+                <svg viewBox="0 0 260 96" xmlns="http://www.w3.org/2000/svg" class="ba">
+                    <line x1="10" y1="10" x2="250" y2="10" stroke="#222" stroke-width="1"/>
+                    <line x1="10" y1="50" x2="250" y2="50" stroke="#222" stroke-width="1"/>
+                    <line x1="10" y1="92" x2="250" y2="92" stroke="#222" stroke-width="1"/>
+                    <rect x="14" y="11" width="14" height="81" rx="1" fill="#e42824" opacity=".9"  style="animation:gu .4s .05s ease both"/>
+                    <rect x="30" y="26" width="14" height="66" rx="1" fill="#636EFA" opacity=".8"  style="animation:gu .4s .1s ease both"/>
+                    <rect x="46" y="40" width="14" height="52" rx="1" fill="#00CC96" opacity=".7"  style="animation:gu .4s .15s ease both"/>
+                    <rect x="82" y="18" width="14" height="74" rx="1" fill="#e42824" opacity=".82" style="animation:gu .4s .2s ease both"/>
+                    <rect x="98" y="32" width="14" height="60" rx="1" fill="#636EFA" opacity=".72" style="animation:gu .4s .25s ease both"/>
+                    <rect x="114" y="46" width="14" height="46" rx="1" fill="#00CC96" opacity=".62" style="animation:gu .4s .3s ease both"/>
+                    <rect x="150" y="28" width="14" height="64" rx="1" fill="#e42824" opacity=".72" style="animation:gu .4s .35s ease both"/>
+                    <rect x="166" y="42" width="14" height="50" rx="1" fill="#636EFA" opacity=".62" style="animation:gu .4s .4s ease both"/>
+                    <rect x="182" y="56" width="14" height="36" rx="1" fill="#00CC96" opacity=".52" style="animation:gu .4s .45s ease both"/>
+                    <rect x="218" y="44" width="14" height="48" rx="1" fill="#e42824" opacity=".6"  style="animation:gu .4s .5s ease both"/>
+                    <rect x="234" y="57" width="14" height="35" rx="1" fill="#636EFA" opacity=".5"  style="animation:gu .4s .55s ease both"/>
+                </svg>
+            </div>
+            <div class="cbody">
+                <div><div class="ctitle">Barras Verticais Compostas</div><div class="cdesc">Grupos de colunas com múltiplas séries. Compara várias métricas por categoria.</div></div>
+                <div class="cfoot"><div class="tags"><span class="chip">multi-série</span><span class="chip">agrupado</span></div><span class="arr">→</span></div>
+            </div>
+        </a>
+
+        <!-- V Empilhadas -->
+        <a class="card off" href="#" onclick="return false;">
+            <div class="ctop"><span class="cat">Vertical · Empilhadas</span><span class="bdg soon">Em Breve</span></div>
+            <div class="cprev">
+                <svg viewBox="0 0 260 96" xmlns="http://www.w3.org/2000/svg" class="ba">
+                    <line x1="18" y1="8"  x2="244" y2="8"  stroke="#222" stroke-width="1"/>
+                    <line x1="18" y1="92" x2="244" y2="92" stroke="#222" stroke-width="1"/>
+                    <rect x="28"  y="46" width="34" height="46" rx="2" fill="#e42824" opacity=".85" style="animation:gu .4s .05s ease both"/>
+                    <rect x="28"  y="22" width="34" height="24" rx="0" fill="#636EFA" opacity=".80" style="animation:gu .4s .10s ease both"/>
+                    <rect x="28"  y="9"  width="34" height="13" rx="2" fill="#00CC96" opacity=".74" style="animation:gu .4s .15s ease both"/>
+                    <rect x="92"  y="54" width="34" height="38" rx="2" fill="#e42824" opacity=".78" style="animation:gu .4s .20s ease both"/>
+                    <rect x="92"  y="32" width="34" height="22" rx="0" fill="#636EFA" opacity=".72" style="animation:gu .4s .25s ease both"/>
+                    <rect x="92"  y="20" width="34" height="12" rx="2" fill="#00CC96" opacity=".66" style="animation:gu .4s .30s ease both"/>
+                    <rect x="156" y="60" width="34" height="32" rx="2" fill="#e42824" opacity=".70" style="animation:gu .4s .35s ease both"/>
+                    <rect x="156" y="41" width="34" height="19" rx="0" fill="#636EFA" opacity=".64" style="animation:gu .4s .40s ease both"/>
+                    <rect x="156" y="30" width="34" height="11" rx="2" fill="#00CC96" opacity=".58" style="animation:gu .4s .45s ease both"/>
+                    <rect x="214" y="70" width="34" height="22" rx="2" fill="#e42824" opacity=".58" style="animation:gu .4s .50s ease both"/>
+                    <rect x="214" y="56" width="34" height="14" rx="0" fill="#636EFA" opacity=".52" style="animation:gu .4s .55s ease both"/>
+                    <rect x="214" y="47" width="34" height="9"  rx="2" fill="#00CC96" opacity=".46" style="animation:gu .4s .60s ease both"/>
+                </svg>
+            </div>
+            <div class="cbody">
+                <div><div class="ctitle">Barras Empilhadas</div><div class="cdesc">Séries empilhadas numa coluna só. Ótimo para composição de totais e participação percentual.</div></div>
+                <div class="cfoot"><div class="tags"><span class="chip">stacked</span><span class="chip">composição</span></div><span class="arr">→</span></div>
+            </div>
+        </a>
+
+        <!-- Bateria -->
+        <a class="card" href="app_bateria.html">
+            <div class="ctop"><span class="cat">Especial · Infográfico</span><span class="bdg ok">Disponível</span></div>
+            <div class="cprev">
+                <svg viewBox="0 0 260 96" xmlns="http://www.w3.org/2000/svg" class="ba">
+                    <rect x="6"  y="13" width="20" height="33" rx="3" fill="#2a2a2a" stroke="#3a3a3a" stroke-width="1"/>
+                    <rect x="9"  y="10" width="14" height="4"  rx="1" fill="#3a3a3a"/>
+                    <rect x="6"  y="54" width="20" height="33" rx="3" fill="#2a2a2a" stroke="#3a3a3a" stroke-width="1"/>
+                    <rect x="9"  y="51" width="14" height="4"  rx="1" fill="#3a3a3a"/>
+                    <text x="31" y="27" fill="#444" font-size="7" font-family="JetBrains Mono">Galaxy S24 Ultra</text>
+                    <text x="31" y="68" fill="#444" font-size="7" font-family="JetBrains Mono">iPhone 15 Pro Max</text>
+                    <rect x="31" y="17" width="198" height="13" rx="2" fill="#e42824" opacity=".88" style="animation:gr .6s .1s ease both"/>
+                    <text x="232" y="28" fill="#e42824" font-size="8" font-weight="bold" font-family="JetBrains Mono">29h</text>
+                    <rect x="31" y="58" width="158" height="13" rx="2" fill="#636EFA" opacity=".78" style="animation:gr .6s .3s ease both"/>
+                    <text x="192" y="69" fill="#636EFA" font-size="8" font-weight="bold" font-family="JetBrains Mono">23h</text>
+                    <text x="50" y="93" fill="#2a2a2a" font-size="7" font-family="JetBrains Mono">5000mAh · AMOLED · 4400mAh</text>
+                </svg>
+            </div>
+            <div class="cbody">
+                <div><div class="ctitle">Infográfico de Bateria</div><div class="cdesc">Compare autonomia de dispositivos com imagem lateral, specs e capacidade da bateria.</div></div>
+                <div class="cfoot"><div class="tags"><span class="chip">mobile</span><span class="chip">autonomia</span></div><span class="arr">→</span></div>
+            </div>
+        </a>
+
+    </div>
+
+    <!-- ══ OUTROS ══ -->
+    <div class="sec"><span class="tag">Outros Tipos</span><div class="line"></div></div>
+    <div class="g4">
+
+        <!-- Scatter -->
+        <a class="card off" href="#" onclick="return false;">
+            <div class="ctop"><span class="cat">Scatter · XY</span><span class="bdg soon">Em Breve</span></div>
+            <div class="cprev">
+                <svg viewBox="0 0 260 96" xmlns="http://www.w3.org/2000/svg">
+                    <line x1="20" y1="10" x2="20"  y2="86" stroke="#2a2a2a" stroke-width="1.5"/>
+                    <line x1="20" y1="86" x2="250" y2="86" stroke="#2a2a2a" stroke-width="1.5"/>
+                    <circle cx="48"  cy="70" r="5"  fill="#e42824" opacity=".80" style="animation:fp .4s .10s ease both"/>
+                    <circle cx="78"  cy="48" r="7"  fill="#636EFA" opacity=".75" style="animation:fp .4s .15s ease both"/>
+                    <circle cx="108" cy="33" r="4"  fill="#00CC96" opacity=".80" style="animation:fp .4s .20s ease both"/>
+                    <circle cx="140" cy="58" r="9"  fill="#e42824" opacity=".65" style="animation:fp .4s .25s ease both"/>
+                    <circle cx="168" cy="26" r="5"  fill="#AB63FA" opacity=".80" style="animation:fp .4s .30s ease both"/>
+                    <circle cx="198" cy="44" r="6"  fill="#636EFA" opacity=".70" style="animation:fp .4s .35s ease both"/>
+                    <circle cx="230" cy="18" r="8"  fill="#e42824" opacity=".75" style="animation:fp .4s .40s ease both"/>
+                    <circle cx="62"  cy="80" r="4"  fill="#00CC96" opacity=".60" style="animation:fp .4s .45s ease both"/>
+                    <circle cx="152" cy="14" r="6"  fill="#FFA15A" opacity=".75" style="animation:fp .4s .50s ease both"/>
+                </svg>
+            </div>
+            <div class="cbody">
+                <div><div class="ctitle">Gráfico de Dispersão</div><div class="cdesc">Plota dois eixos numéricos (X × Y). Tamanho do ponto pode representar uma 3ª métrica.</div></div>
+                <div class="cfoot"><div class="tags"><span class="chip">X × Y</span><span class="chip">bubble</span></div><span class="arr">→</span></div>
+            </div>
+        </a>
+
+        <!-- Área -->
+        <a class="card off" href="#" onclick="return false;">
+            <div class="ctop"><span class="cat">Área · Temporal</span><span class="bdg soon">Em Breve</span></div>
+            <div class="cprev">
+                <svg viewBox="0 0 260 96" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="ga1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#e42824" stop-opacity=".5"/><stop offset="100%" stop-color="#e42824" stop-opacity="0"/></linearGradient>
+                        <linearGradient id="ga2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#636EFA" stop-opacity=".38"/><stop offset="100%" stop-color="#636EFA" stop-opacity="0"/></linearGradient>
+                    </defs>
+                    <path d="M10,78 L42,63 L82,44 L122,36 L162,49 L202,30 L250,23 L250,90 L10,90Z" fill="url(#ga1)"/>
+                    <path d="M10,78 L42,63 L82,44 L122,36 L162,49 L202,30 L250,23" fill="none" stroke="#e42824" stroke-width="2.5" stroke-dasharray="300" stroke-dashoffset="300" style="animation:ld .8s .05s ease forwards"/>
+                    <path d="M10,86 L42,80 L82,70 L122,65 L162,73 L202,60 L250,54 L250,90 L10,90Z" fill="url(#ga2)"/>
+                    <path d="M10,86 L42,80 L82,70 L122,65 L162,73 L202,60 L250,54" fill="none" stroke="#636EFA" stroke-width="2" stroke-dasharray="300" stroke-dashoffset="300" style="animation:ld .8s .30s ease forwards"/>
+                </svg>
+            </div>
+            <div class="cbody">
+                <div><div class="ctitle">Gráfico de Área</div><div class="cdesc">Evolução temporal com área preenchida. Destaca tendências e variações acumuladas.</div></div>
+                <div class="cfoot"><div class="tags"><span class="chip">temporal</span><span class="chip">tendência</span></div><span class="arr">→</span></div>
+            </div>
+        </a>
+
+        <!-- Pizza/Donut -->
+        <a class="card off" href="#" onclick="return false;">
+            <div class="ctop"><span class="cat">Pizza · Proporção</span><span class="bdg soon">Em Breve</span></div>
+            <div class="cprev">
+                <svg viewBox="0 0 260 96" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="75"  cy="48" r="38" fill="none" stroke="#e42824" stroke-width="19" stroke-dasharray="120 239" stroke-dashoffset="-60"  opacity=".88" style="animation:fp .5s .10s ease both"/>
+                    <circle cx="75"  cy="48" r="38" fill="none" stroke="#636EFA" stroke-width="19" stroke-dasharray="72 239"  stroke-dashoffset="60"   opacity=".80" style="animation:fp .5s .20s ease both"/>
+                    <circle cx="75"  cy="48" r="38" fill="none" stroke="#00CC96" stroke-width="19" stroke-dasharray="47 239"  stroke-dashoffset="132"  opacity=".72" style="animation:fp .5s .30s ease both"/>
+                    <circle cx="175" cy="48" r="30" fill="none" stroke="#0d0d0d" stroke-width="10"/>
+                    <circle cx="175" cy="48" r="30" fill="none" stroke="#e42824" stroke-width="18" stroke-dasharray="95 188"  stroke-dashoffset="-48"  opacity=".86" style="animation:fp .5s .15s ease both"/>
+                    <circle cx="175" cy="48" r="30" fill="none" stroke="#AB63FA" stroke-width="18" stroke-dasharray="57 188"  stroke-dashoffset="47"   opacity=".76" style="animation:fp .5s .25s ease both"/>
+                    <circle cx="175" cy="48" r="30" fill="none" stroke="#FFA15A" stroke-width="18" stroke-dasharray="36 188"  stroke-dashoffset="104"  opacity=".68" style="animation:fp .5s .35s ease both"/>
+                    <circle cx="175" cy="48" r="17" fill="#0d0d0d"/>
+                </svg>
+            </div>
+            <div class="cbody">
+                <div><div class="ctitle">Pizza e Donut</div><div class="cdesc">Proporções e participações percentuais. Suporta pizza simples e rosca com legenda.</div></div>
+                <div class="cfoot"><div class="tags"><span class="chip">proporção</span><span class="chip">donut</span></div><span class="arr">→</span></div>
+            </div>
+        </a>
+
+        <!-- Carregamento -->
+        <a class="card off" href="#" onclick="return false;">
+            <div class="ctop"><span class="cat">Especial · Recarga</span><span class="bdg soon">Em Breve</span></div>
+            <div class="cprev">
+                <svg viewBox="0 0 260 96" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="18" y="28" width="224" height="40" rx="6" fill="#1a1a1a" stroke="#2a2a2a" stroke-width="1"/>
+                    <rect x="18" y="28" width="0"   height="40" rx="6" fill="#e42824" opacity=".72">
+                        <animate attributeName="width" from="0" to="164" dur="2s" repeatCount="indefinite" calcMode="ease-out"/>
+                    </rect>
+                    <text x="130" y="53" text-anchor="middle" fill="white" font-size="13" font-family="JetBrains Mono" font-weight="bold">0 → 100%</text>
+                    <text x="130" y="83" text-anchor="middle" fill="#333" font-size="9" font-family="JetBrains Mono">Tempo de Carregamento</text>
+                    <line x1="18" y1="20" x2="18"  y2="14" stroke="#444" stroke-width="1"/>
+                    <line x1="100" y1="20" x2="100" y2="14" stroke="#333" stroke-width="1"/>
+                    <line x1="242" y1="20" x2="242" y2="14" stroke="#333" stroke-width="1"/>
+                    <text x="18"  y="12" fill="#444" font-size="7" font-family="JetBrains Mono">0%</text>
+                    <text x="95"  y="12" fill="#333" font-size="7" font-family="JetBrains Mono">50%</text>
+                    <text x="234" y="12" fill="#333" font-size="7" font-family="JetBrains Mono">100%</text>
+                </svg>
+            </div>
+            <div class="cbody">
+                <div><div class="ctitle">Teste de Carregamento</div><div class="cdesc">Curvas de carga de bateria do 0 ao 100%. Compare velocidades de recarga entre dispositivos.</div></div>
+                <div class="cfoot"><div class="tags"><span class="chip">mobile</span><span class="chip">recarga</span></div><span class="arr">→</span></div>
+            </div>
+        </a>
+
+    </div>
+
+
+    </details>
+
+    <footer>
+        <span>RivaPlotter &nbsp;·&nbsp; Adrenaline &nbsp;·&nbsp; 2025</span>
+        <span><span style="color:var(--green)">●</span> Disponível &nbsp;&nbsp;<span style="color:var(--orange)">●</span> Em Breve</span>
+    </footer>
+
+</div>
+</body>
+</html>

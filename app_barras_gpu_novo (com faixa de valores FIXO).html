@@ -1,0 +1,3953 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Performance e custo de Hardware — RivaPlotter</title>
+    <!-- Leitor de Excel (.xlsx/.xls) com fallback real entre CDNs -->
+    <script>
+    (function () {
+        var urls = [
+            'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
+            'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
+            'https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js'
+        ];
+        function tentar(i) {
+            if (window.XLSX || i >= urls.length) return;
+            var el = document.createElement('script');
+            el.src = urls[i];
+            el.onerror = function () { tentar(i + 1); };
+            document.head.appendChild(el);
+        }
+        tentar(0);
+    })();
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg-main: #0c0c0e;
+            --bg-card: #141417;
+            --bg-subtle: #1a1a1f;
+            --bg-tab-bar: #101013;
+            --bg-input: #0e0e11;
+            --border: #25252b;
+            --border-hover: #363640;
+            --text-main: #f4f4f6;
+            --text-muted: #8e8e9a;
+            --red: #e42824;
+
+            --color-hw: #AB63FA;
+            --color-preco: #00CC96;
+            --color-teste: #636EFA;
+            --color-winner: #f59e0b;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            padding: 16px;
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .dashboard {
+            max-width: 1480px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 16px;
+        }
+
+        /* Cabeçalho */
+        .header {
+            grid-column: 1 / -1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--bg-card);
+            padding: 14px 20px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .header-left {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            min-width: 0;
+        }
+
+        .header-top {
+            display: flex;
+            align-items: baseline;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .voltar {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: var(--red);
+            text-decoration: none;
+            font-weight: 700;
+        }
+        .voltar:hover { text-decoration: underline; }
+
+        .header h1 {
+            font-size: 1.15rem;
+            font-weight: 800;
+            letter-spacing: -0.3px;
+            line-height: 1.2;
+        }
+        .header h1 span { color: var(--red); }
+
+        .status-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            font-size: 0.73rem;
+            padding: 3px 9px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-muted);
+            font-weight: 500;
+            max-width: 100%;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            background-color: var(--bg-subtle);
+            color: var(--text-main);
+            padding: 8px 14px;
+            border-radius: 7px;
+            font-weight: 600;
+            font-size: 0.82rem;
+            border: 1px solid var(--border);
+            cursor: pointer;
+            transition: background 0.15s, border-color 0.15s, transform 0.15s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            text-decoration: none;
+            line-height: 1.2;
+        }
+
+        .btn:hover:not(:disabled) {
+            border-color: var(--border-hover);
+            background-color: #222229;
+        }
+        .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+        .btn-primary {
+            background-color: var(--red);
+            border-color: var(--red);
+            color: #ffffff;
+        }
+        .btn-primary:hover:not(:disabled) {
+            background-color: #d0221e;
+            border-color: #d0221e;
+        }
+
+        .btn-export {
+            background-color: #00CC96;
+            border-color: #00CC96;
+            color: #04130e;
+        }
+        .btn-export:hover:not(:disabled) {
+            background-color: #00b887;
+            border-color: #00b887;
+        }
+
+        .btn-link {
+            background: transparent;
+            color: var(--text-muted);
+        }
+        .btn-link:hover { color: var(--text-main); }
+
+        .btn-secondary {
+            background-color: var(--bg-subtle);
+            width: 100%;
+            justify-content: center;
+            padding: 7px 10px;
+            font-size: 0.78rem;
+            color: var(--text-muted);
+        }
+        .btn-secondary:hover:not(:disabled) { color: var(--text-main); }
+
+        #uploadFile {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+            overflow: hidden;
+            z-index: -1;
+        }
+
+        /* Barra Lateral */
+        .sidebar {
+            background: var(--bg-card);
+            padding: 14px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: calc(100vh - 110px);
+            overflow-y: auto;
+        }
+
+        .sidebar::-webkit-scrollbar { width: 6px; }
+        .sidebar::-webkit-scrollbar-thumb { background: #2a2a32; border-radius: 99px; }
+
+        .panel-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border);
+        }
+        .panel-group:last-of-type { border-bottom: none; padding-bottom: 0; }
+
+        .panel-label {
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--text-muted);
+        }
+
+        .section-divider {
+            font-size: 0.68rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.7px;
+            color: var(--text-muted);
+            padding-top: 6px;
+            border-top: 1px solid var(--border);
+            margin-top: 2px;
+        }
+        .section-divider:first-child { border-top: none; padding-top: 0; margin-top: 0; }
+
+        .row-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            min-width: 0;
+        }
+
+        .control-group label {
+            font-size: 0.74rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            display: inline-block;
+            flex: none;
+        }
+
+        select, input[type="text"], input[type="number"] {
+            width: 100%;
+            padding: 7px 9px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            border-radius: 6px;
+            font-size: 0.81rem;
+            outline: none;
+            font-family: inherit;
+            transition: border-color 0.15s;
+        }
+
+        select:hover:not(:disabled), input[type="text"]:hover:not(:disabled), input[type="number"]:hover:not(:disabled) {
+            border-color: var(--border-hover);
+        }
+
+        select:focus, input[type="text"]:focus, input[type="number"]:focus {
+            border-color: var(--red);
+        }
+
+        select:disabled, input[type="text"]:disabled, input[type="number"]:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+
+        .hint {
+            font-size: 0.71rem;
+            color: var(--text-muted);
+            line-height: 1.35;
+        }
+
+        .chk-linha {
+            display: flex !important;
+            align-items: flex-start;
+            gap: 7px;
+            font-size: 0.75rem !important;
+            font-weight: 400 !important;
+            color: var(--text-muted) !important;
+            cursor: pointer;
+            line-height: 1.3;
+            margin-top: 2px;
+        }
+        .chk-linha input { margin-top: 2px; accent-color: var(--red); flex: none; }
+        .chk-linha input:disabled + span { opacity: 0.4; }
+
+        .lista-barras {
+            max-height: 185px;
+            overflow: auto;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg-input);
+        }
+
+        .barra-item {
+            display: flex !important;
+            align-items: center;
+            gap: 7px;
+            padding: 5px 8px;
+            font-size: 0.76rem !important;
+            font-weight: 500 !important;
+            color: var(--text-main) !important;
+            cursor: pointer;
+            border-bottom: 1px solid #18181d;
+        }
+        .barra-item:last-child { border-bottom: none; }
+        .barra-item:hover { background: #1a1a20; }
+        .barra-item input { accent-color: var(--red); flex: none; }
+        .barra-item .barra-nome { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .barra-item.sem-dado .barra-nome { color: var(--text-muted); }
+
+        .cor-picker {
+            width: 34px;
+            height: 32px;
+            padding: 2px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg-input);
+            cursor: pointer;
+            flex: none;
+        }
+        .cor-picker:disabled { opacity: 0.35; cursor: not-allowed; }
+
+        /* Acordeões discretos na barra lateral */
+        details.avancado {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg-input);
+        }
+        details.avancado > summary {
+            list-style: none;
+            cursor: pointer;
+            padding: 9px 11px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            user-select: none;
+        }
+        details.avancado > summary::-webkit-details-marker { display: none; }
+        details.avancado > summary::after {
+            content: '▸';
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            transition: transform 0.18s;
+        }
+        details.avancado[open] > summary::after { transform: rotate(90deg); }
+        details.avancado[open] > summary { border-bottom: 1px solid var(--border); }
+        details.avancado > summary:focus-visible { outline: 2px solid var(--red); outline-offset: -2px; border-radius: 8px; }
+        .avancado-corpo { padding: 11px; display: flex; flex-direction: column; gap: 10px; }
+
+        .metric-guidance {
+            color: var(--text-muted);
+            font-size: 0.73rem;
+            font-weight: 500;
+        }
+
+        .fl-caption { font-size: 0.92rem; font-weight: 600; color: #555; margin: -4px 0 14px 0; }
+        .metric-guidance-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.82rem;
+            font-weight: 700;
+            background: #f3f4f6;
+            color: #1f2937;
+            border: 1px solid #d1d5db;
+        }
+
+        /* Área Principal e Abas */
+        .main-content {
+            background: var(--bg-card);
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            min-height: 680px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .browser-tabs-bar {
+            background: var(--bg-tab-bar);
+            padding: 8px 14px 0 14px;
+            display: flex;
+            gap: 4px;
+            border-bottom: 1px solid var(--border);
+            align-items: center;
+        }
+
+        .browser-tab {
+            padding: 8px 16px;
+            background: transparent;
+            color: var(--text-muted);
+            border: 1px solid transparent;
+            border-bottom: none;
+            border-radius: 7px 7px 0 0;
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            position: relative;
+            top: 1px;
+            transition: color 0.15s;
+        }
+        .browser-tab:hover { color: var(--text-main); }
+        .browser-tab.active {
+            background: var(--bg-card);
+            color: var(--text-main);
+            border-color: var(--border);
+            border-bottom-color: var(--bg-card);
+        }
+
+        .tab-pane {
+            display: none;
+            padding: 24px;
+            flex: 1;
+        }
+        .tab-pane.active { display: block; }
+
+        #abaGrafico { background: #eceef1; }
+
+        /* Estado Vazio (Dropzone limpa) */
+        .empty-state {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            gap: 12px;
+            padding: 48px 24px;
+            margin: 24px;
+            border: 1.5px dashed var(--border-hover);
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.015);
+            transition: border-color 0.2s, background 0.2s;
+        }
+        .empty-state.dragover {
+            border-color: var(--red);
+            background: rgba(228, 40, 36, 0.05);
+        }
+        .empty-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            background: var(--bg-subtle);
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+        }
+        .empty-state h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+        .empty-state p {
+            font-size: 0.84rem;
+            color: var(--text-muted);
+            max-width: 440px;
+            line-height: 1.45;
+        }
+
+        /* =========================================================
+           ESTILOS DO CARD FLOURISH NATIVO (ZERO DEPENDÊNCIAS)
+           ========================================================= */
+        .flourish-card {
+            background: #ffffff;
+            color: #222222;
+            max-width: 1050px;
+            margin: 0 auto;
+            padding: 32px 36px 24px 36px;
+            border-radius: 6px;
+            box-shadow: 0 2px 16px rgba(0, 0, 0, 0.06);
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* Edição direta no card (WYSIWYG) */
+        .fl-editable {
+            border: 1px solid transparent;
+            border-radius: 4px;
+            padding: 2px 6px;
+            margin-left: -6px;
+            margin-right: -6px;
+            transition: border-color 0.15s, background-color 0.15s;
+            cursor: text;
+        }
+        .fl-editable:hover {
+            border-color: #d1d5db;
+            border-style: dashed;
+            background-color: #f9fafb;
+        }
+        .fl-editable:focus {
+            outline: none;
+            border-style: solid;
+            border-color: var(--red);
+            background-color: #ffffff;
+            box-shadow: 0 0 0 2px rgba(228, 40, 36, 0.12);
+        }
+        .fl-editable:empty::before {
+            content: attr(data-placeholder);
+            color: #9ca3af;
+            font-weight: 400;
+        }
+
+        .fl-title {
+            font-size: 1.65rem;
+            font-weight: 700;
+            color: #333333;
+            margin-bottom: 4px;
+            letter-spacing: -0.3px;
+        }
+
+        .fl-subtitle {
+            font-size: 1.02rem;
+            font-weight: 400;
+            color: #555555;
+            margin-bottom: 18px;
+        }
+
+        .fl-controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 14px 18px;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+
+        .fl-select-minimal {
+            appearance: auto;
+            background: transparent;
+            border: none;
+            border-bottom: 1px solid #d1d5db;
+            padding: 6px 28px 6px 2px;
+            font-size: 0.92rem;
+            font-weight: 700;
+            color: #222222;
+            cursor: pointer;
+            outline: none;
+            width: auto;
+            border-radius: 0;
+        }
+
+        .fl-series-picker {
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .fl-series-input-box {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            align-items: center;
+            border: 1px solid #e5e7eb;
+            padding: 7px 12px;
+            border-radius: 4px;
+            background: #ffffff;
+            cursor: text;
+        }
+
+        .fl-chip {
+            background: #f3f4f6;
+            border: 1px solid #d1d5db;
+            color: #1f2937;
+            font-size: 0.78rem;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 3px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .fl-chip.chip-warn {
+            opacity: 0.65;
+            border-style: dashed;
+        }
+
+        .fl-chip-dot { width: 8px; height: 8px; border-radius: 50%; }
+        .fl-chip-remove { cursor: pointer; color: #6b7280; font-weight: 700; font-size: 0.9rem; line-height: 1; }
+        .fl-chip-remove:hover { color: #ef4444; }
+
+        .fl-series-search {
+            border: none !important;
+            background: transparent !important;
+            color: #222222 !important;
+            padding: 4px !important;
+            font-size: 0.9rem !important;
+            flex: 1;
+            min-width: 180px;
+            outline: none !important;
+        }
+
+        .fl-series-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: #ffffff;
+            border: 1px solid #d1d5db;
+            border-top: none;
+            max-height: 230px;
+            overflow-y: auto;
+            z-index: 50;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.12);
+            display: none;
+        }
+
+        .fl-series-dropdown.open { display: block; }
+
+        .fl-dropdown-item {
+            padding: 10px 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.9rem;
+            color: #222222;
+            cursor: pointer;
+        }
+
+        .fl-dropdown-item:hover { background: #e5e7eb; }
+        .fl-dropdown-item.selected { background: #f3f4f6; font-weight: 600; }
+        .fl-dropdown-item.selected:hover { background: #e5e7eb; }
+        .fl-press-hint { font-size: 0.8rem; color: #4b5563; }
+
+        /* Motor de Gráfico Nativo Flourish */
+        .fl-chart-area {
+            width: 100%;
+            min-height: 380px;
+            padding: 10px 0;
+            position: relative;
+        }
+
+        .fl-chart-v {
+            display: flex;
+            height: 390px;
+            margin-top: 16px;
+            position: relative;
+            padding-left: 42px;
+            padding-bottom: 52px;
+            align-items: flex-end;
+            gap: 14px;
+            border-bottom: 1px solid #e5e7eb;
+            container-type: inline-size;
+        }
+
+        .fl-y-grid {
+            position: absolute;
+            left: 42px;
+            right: 0;
+            top: 0;
+            bottom: 52px;
+            pointer-events: none;
+        }
+
+        .fl-grid-line {
+            position: absolute;
+            left: 0;
+            right: 0;
+            border-top: 1px solid #f0f0f0;
+        }
+
+        .fl-grid-label {
+            position: absolute;
+            left: -40px;
+            top: -9px;
+            width: 32px;
+            text-align: right;
+            font-size: 0.8rem;
+            color: #666666;
+        }
+
+        .fl-v-col {
+            flex: 1;
+            min-width: 0;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            align-items: center;
+            position: relative;
+            z-index: 2;
+        }
+
+        .fl-v-bar {
+            width: 100%;
+            max-width: 120px;
+            min-height: 28px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 1px;
+            color: #ffffff;
+            font-weight: 700;
+            font-size: clamp(0.9rem, calc(100cqw / (var(--n, 8) * 4.5)), 1.4rem);
+            border-radius: 1px;
+            transition: height 0.25s ease;
+            position: relative;
+            cursor: pointer;
+            line-height: 1.1;
+        }
+
+        .fl-v-label {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100%;
+            max-width: 120px;
+            box-sizing: border-box;
+            padding: 0 2px;
+            font-size: clamp(7.5px, calc(100cqw / (var(--n, 8) * 6.2)), 12px);
+            font-weight: 600;
+            line-height: 1.18;
+            color: #222222;
+            text-align: center;
+            white-space: normal;
+            word-break: break-word;
+            overflow: visible;
+        }
+
+        .fl-chart-h {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            padding: 10px 0;
+        }
+
+        .fl-h-row {
+            display: grid;
+            grid-template-columns: 170px 1fr;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .fl-h-label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            line-height: 1.2;
+            color: #222222;
+            text-align: right;
+            white-space: normal;
+            word-break: break-word;
+        }
+
+        .fl-h-track {
+            background: #f9fafb;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            position: relative;
+        }
+
+        .fl-h-bar {
+            height: 100%;
+            min-width: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            color: #ffffff;
+            font-weight: 700;
+            font-size: 1.2rem;
+            transition: width 0.25s ease;
+            cursor: pointer;
+            position: relative;
+            z-index: 1;
+            padding: 0 8px;
+        }
+
+        .fl-footer {
+            margin-top: 22px;
+            font-size: 1.02rem;
+            font-weight: 700;
+            color: #333333;
+        }
+
+        /* Planilha Interativa */
+        .legend-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 14px;
+            margin-bottom: 14px;
+            padding: 10px 14px;
+            background: var(--bg-input);
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            align-items: center;
+        }
+
+        .legend-item { display: flex; align-items: center; gap: 6px; }
+
+        .table-wrapper {
+            max-height: 560px;
+            overflow: auto;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg-input);
+        }
+
+        table.data-sheet {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.82rem;
+            text-align: left;
+            white-space: nowrap;
+        }
+
+        table.data-sheet th, table.data-sheet td {
+            padding: 9px 12px;
+            border-bottom: 1px solid #1a1a1f;
+            border-right: 1px solid #1a1a1f;
+        }
+
+        table.data-sheet th {
+            position: sticky;
+            top: 0;
+            background: #16161c;
+            color: var(--text-muted);
+            font-weight: 600;
+            z-index: 2;
+            cursor: pointer;
+        }
+
+        table.data-sheet tbody tr { cursor: pointer; }
+        table.data-sheet tbody tr:hover { background: rgba(255, 255, 255, 0.03); }
+
+        tr.row-inactive { opacity: 0.28; filter: grayscale(90%); }
+
+        th.col-hw { background: rgba(171, 99, 250, 0.2) !important; color: #ddd6fe !important; border-bottom: 2px solid var(--color-hw); }
+        td.col-hw { background: rgba(171, 99, 250, 0.06); font-weight: 600; color: #ede9fe; }
+
+        th.col-preco { background: rgba(0, 204, 150, 0.2) !important; color: #a7f3d0 !important; border-bottom: 2px solid var(--color-preco); }
+        td.col-preco { background: rgba(0, 204, 150, 0.06); color: #d1fae5; }
+
+        th.col-teste { background: rgba(99, 110, 250, 0.24) !important; color: #bfdbfe !important; border-bottom: 2px solid var(--color-teste); }
+        td.col-teste { background: rgba(99, 110, 250, 0.1); font-weight: 600; color: #eff6ff; }
+
+        td.cell-winner {
+            background: rgba(245, 158, 11, 0.24) !important;
+            color: #fef08a !important;
+            font-weight: 700;
+            box-shadow: inset 0 0 0 1px var(--color-winner);
+        }
+
+        @media (max-width: 960px) {
+            .dashboard { grid-template-columns: 1fr; }
+            .sidebar { max-height: none; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            details.avancado > summary::after { transition: none; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="dashboard">
+    <div class="header">
+        <div class="header-left">
+            <div class="header-top">
+                <a class="voltar" href="index.html">← RivaPlotter</a>
+                <h1>Performance e custo de <span>Hardware</span></h1>
+            </div>
+            <div class="status-row">
+                <div id="statusArquivo" class="status-badge">Nenhuma planilha carregada</div>
+                <div id="statusPrecos" class="status-badge">Preços: opcional</div>
+            </div>
+        </div>
+        <div class="header-actions">
+            <a class="btn btn-link" href="historico-precos.html">Histórico</a>
+            <input type="file" id="uploadFile" accept=".xlsx,.xls,.csv,.tsv,.txt" multiple />
+            <label for="uploadFile" class="btn btn-primary" title="Aceita planilha de testes e/ou base de preços (.xlsx, .csv)">Carregar arquivos</label>
+            <button class="btn btn-export" type="button" id="btnExportarHtml" disabled>Exportar HTML</button>
+        </div>
+    </div>
+
+    <!-- Barra Lateral Limpa -->
+    <div class="sidebar">
+
+        <!-- Teste e Destaque -->
+        <div class="panel-group">
+            <div class="panel-label">Teste e Destaque</div>
+
+            <div class="control-group" id="grpJogo" style="display:none;">
+                <label for="selectJogo">
+                    <span class="dot" style="background: var(--color-teste);"></span>
+                    Teste inicial
+                </label>
+                <select id="selectJogo" disabled></select>
+            </div>
+
+            <div class="control-group" id="grpRes" style="display:none;">
+                <label for="selectResolucao">Resolução / subteste</label>
+                <select id="selectResolucao" disabled></select>
+                <div id="infoTeste" class="hint"></div>
+            </div>
+
+            <div class="control-group" id="grpTesteBruto">
+                <label for="selectTeste">
+                    <span class="dot" style="background: var(--color-teste);"></span>
+                    Teste inicial
+                </label>
+                <select id="selectTeste" disabled></select>
+            </div>
+
+            <div class="control-group" id="grpPrincipal">
+                <label for="selectPrincipal">Placa em destaque</label>
+                <div style="display:flex;gap:6px;align-items:center;">
+                    <select id="selectPrincipal" style="flex:1;min-width:0;" disabled><option value="">Nenhuma</option></select>
+                    <input type="color" id="corPrincipal" class="cor-picker" value="#ffd700" disabled title="Cor de destaque" aria-label="Cor da placa principal" />
+                </div>
+            </div>
+        </div>
+
+        <!-- Aparência -->
+        <div class="panel-group">
+            <div class="panel-label">Aparência</div>
+
+            <div class="row-2">
+                <div class="control-group">
+                    <label for="selectEstiloGrafico">Barras</label>
+                    <select id="selectEstiloGrafico">
+                        <option value="v">Verticais</option>
+                        <option value="h">Horizontais</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label for="selectMaxPlacas">Quantidade</label>
+                    <select id="selectMaxPlacas">
+                        <option value="3">3 barras</option><option value="4">4 barras</option><option value="5">5 barras</option>
+                        <option value="6" selected>6 barras</option><option value="8">8 barras</option><option value="10">10 barras</option>
+                        <option value="12">12 barras</option><option value="15">15 barras</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label for="selectEsquemaCor">Paleta de cores</label>
+                <select id="selectEsquemaCor">
+                    <option value="geracoes" selected>Socket / Geração</option>
+                    <option value="marcas">Marca (AMD / NVIDIA / Intel)</option>
+                    <option value="flourish">Aleatório por barra</option>
+                </select>
+                <button type="button" class="btn btn-secondary" id="btnSortearCores" style="display:none;">Sortear outras cores</button>
+            </div>
+
+            <div class="control-group">
+                <label for="selectOrdem">Posição do líder</label>
+                <select id="selectOrdem">
+                    <option value="esq" selected>Esquerda (embaixo, se horizontal)</option>
+                    <option value="dir">Direita (em cima, se horizontal)</option>
+                </select>
+            </div>
+
+            <label class="chk-linha" for="chkAutoHTelefone">
+                <input type="checkbox" id="chkAutoHTelefone" checked />
+                <span>Horizontal automático no celular (6+ barras)</span>
+            </label>
+        </div>
+
+        <!-- Seleção manual de barras (recolhido por padrão) -->
+        <details class="avancado">
+            <summary><span>Hardwares exibidos <span id="contBarras" class="hint"></span></span></summary>
+            <div class="avancado-corpo">
+                <input type="text" id="barrasBusca" placeholder="Buscar hardware..." autocomplete="off" />
+                <div id="listaBarras" class="lista-barras"><div class="hint" style="padding:8px;">Carregue uma planilha.</div></div>
+                <button type="button" class="btn btn-secondary" id="btnRestaurarPadrao" disabled>
+                    Voltar às N melhores
+                </button>
+            </div>
+        </details>
+
+        <input type="hidden" id="selectResPadrao" value="">
+
+        <!-- Configurações Avançadas -->
+        <details class="avancado" id="detAvancado">
+            <summary>Avançado</summary>
+            <div class="avancado-corpo">
+
+                <div class="section-divider">Recursos do gráfico</div>
+
+                <label class="chk-linha" for="chkUsarPills">
+                    <input type="checkbox" id="chkUsarPills" />
+                    <span>Botões segmentados (pills) para resolução, métrica e faixa de preço</span>
+                </label>
+
+                <label class="chk-linha" for="chkCompRelativa">
+                    <input type="checkbox" id="chkCompRelativa" />
+                    <span>Comparação relativa (%) contra a placa em destaque</span>
+                </label>
+
+                <div class="control-group">
+                    <label for="selectLinhaRef">Linha de referência</label>
+                    <select id="selectLinhaRef">
+                        <option value="nenhuma" selected>Desativada</option>
+                        <option value="media">Média das barras exibidas</option>
+                        <option value="destaque">Valor da placa em destaque</option>
+                        <option value="fixo">Valor personalizado</option>
+                    </select>
+                </div>
+
+                <div class="row-2" id="grpLinhaRefFixo" style="display:none;">
+                    <div class="control-group">
+                        <label for="inputLinhaRefValor">Valor</label>
+                        <input type="number" id="inputLinhaRefValor" value="60" step="any" min="0" />
+                    </div>
+                    <div class="control-group">
+                        <label for="inputLinhaRefRotulo">Rótulo</label>
+                        <input type="text" id="inputLinhaRefRotulo" placeholder="Ex: 60 FPS" />
+                    </div>
+                </div>
+
+                <div class="section-divider">Planilha</div>
+
+                <div class="control-group">
+                    <label for="selectAba">Aba do Excel</label>
+                    <select id="selectAba" disabled><option>Aguardando arquivo...</option></select>
+                </div>
+
+                <button type="button" id="btnTranspor" disabled style="display:none"></button>
+
+                <div class="control-group">
+                    <label for="selectColHardware">
+                        <span class="dot" style="background: var(--color-hw);"></span>
+                        Coluna dos hardwares
+                    </label>
+                    <select id="selectColHardware" disabled></select>
+                </div>
+
+                <div class="control-group">
+                    <label for="selectColPreco">
+                        <span class="dot" style="background: var(--color-preco);"></span>
+                        Coluna de preço
+                    </label>
+                    <select id="selectColPreco" disabled></select>
+                </div>
+
+                <div class="control-group" id="grpResHab" style="display:none;">
+                    <label>Resoluções habilitadas</label>
+                    <div id="listaRes" class="lista-barras" style="padding:2px 0;"></div>
+                </div>
+
+                <div class="control-group" id="grpJogosHab" style="display:none;">
+                    <label>Testes habilitados no gráfico final</label>
+                    <div id="listaJogos" class="lista-barras" style="max-height:200px;padding:6px 8px;"></div>
+                    <div class="row-2">
+                        <button type="button" id="btnSoJogos" class="btn btn-secondary">Só jogos</button>
+                        <button type="button" id="btnTodosJogos" class="btn btn-secondary">Todos</button>
+                    </div>
+                </div>
+
+                <div class="section-divider">Faixa de preço</div>
+
+                <div class="control-group" id="grpFaixaPreco">
+                    <label for="selectFaixaPreco">Faixa de valores (R$)</label>
+                    <select id="selectFaixaPreco" disabled>
+                        <option value="todas" selected>Todas as faixas</option>
+                        <option value="0-1500">R$ 0 a 1.500</option>
+                        <option value="1500-2000">R$ 1.500 a 2.000</option>
+                        <option value="2000-3000">R$ 2.000 a 3.000</option>
+                        <option value="3000-4000">R$ 3.000 a 4.000</option>
+                        <option value="4000-5500">R$ 4.000 a 5.500</option>
+                        <option value="5500-8000">R$ 5.500 a 8.000</option>
+                        <option value="8000-15000">R$ 8.000 a 15.000</option>
+                        <option value="15000-">Acima de R$ 15.000</option>
+                    </select>
+                    <div id="infoFaixaPreco" class="hint">Carregue a base de preços para usar este filtro.</div>
+                </div>
+
+                <label class="chk-linha" for="chkFaixaNoCard">
+                    <input type="checkbox" id="chkFaixaNoCard" checked />
+                    <span>Mostrar a faixa de preço no gráfico final (card e HTML exportado)</span>
+                </label>
+
+                <div class="section-divider">Análise e rótulos</div>
+
+                <div class="control-group">
+                    <label for="selectMetrica">Métrica padrão</label>
+                    <select id="selectMetrica">
+                        <option value="bruto">Desempenho bruto (FPS / pontos)</option>
+                        <option value="custo_ponto" selected>Custo por FPS / ponto (R$)</option>
+                    </select>
+                    <div class="metric-guidance" id="metricGuidanceSidebar">Maior é melhor</div>
+                </div>
+
+                <div class="control-group">
+                    <label for="selectPosNomes">Rótulos</label>
+                    <select id="selectPosNomes">
+                        <option value="rotulo">Etiqueta colorida na barra</option>
+                        <option value="legenda">Legenda no topo</option>
+                        <option value="abaixo" selected>Texto simples</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label for="selectCriterio">Ordenação</label>
+                    <select id="selectCriterio">
+                        <option value="valor" selected>Por resultado</option>
+                        <option value="az">Alfabética (A → Z)</option>
+                    </select>
+                </div>
+
+                <div class="section-divider">Base de Preços (CSV)</div>
+
+                <div class="control-group">
+                    <label for="selectPrecoNome">Coluna do nome</label>
+                    <select id="selectPrecoNome" disabled></select>
+                </div>
+
+                <div class="control-group">
+                    <label for="selectPrecoValor">Coluna do preço</label>
+                    <select id="selectPrecoValor" disabled></select>
+                </div>
+
+                <div class="control-group" id="grpModoPreco" style="display:none;">
+                    <label for="selectModoPreco">Preço usado</label>
+                    <select id="selectModoPreco"></select>
+                </div>
+            </div>
+        </details>
+    </div>
+
+    <!-- Área Principal -->
+    <div class="main-content">
+        <div class="browser-tabs-bar">
+            <button class="browser-tab active" data-target="abaGrafico">Preview</button>
+            <button class="browser-tab" data-target="abaPlanilha">Dados</button>
+        </div>
+
+        <div id="emptyState" class="empty-state">
+            <div class="empty-icon" aria-hidden="true">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+            </div>
+            <h3>Arraste suas planilhas aqui</h3>
+            <p>Envie a planilha de testes (<b>.xlsx</b> / <b>.csv</b>) e a base de preços juntas ou separadas — o app reconhece cada arquivo automaticamente.</p>
+            <label for="uploadFile" class="btn btn-primary" style="margin-top:4px;">Selecionar arquivos</label>
+        </div>
+
+        <!-- ABA 1: CARD PREVIEW ESTILO FLOURISH (WYSIWYG) -->
+        <div id="abaGrafico" class="tab-pane active" style="display: none;">
+            <div class="flourish-card">
+                <div class="fl-title fl-editable" id="previewTitulo" contenteditable="true" spellcheck="false" data-placeholder="Clique para editar o título..." title="Clique para editar o título">Performance e Custo</div>
+                <div class="fl-subtitle fl-editable" id="previewSubtitulo" contenteditable="true" spellcheck="false" data-placeholder="Clique para editar o subtítulo..." title="Clique para editar o subtítulo">Performance, custo e relação entre custo e FPS</div>
+
+                <div class="fl-controls-row">
+                    <select id="cardSelectJogo" class="fl-select-minimal" style="display:none;"></select>
+                    <select id="cardSelectRes" class="fl-select-minimal" style="display:none;"></select>
+                    <div id="cardPillsRes" class="fl-pills" style="display:none;"></div>
+                    <select id="cardSelectTeste" class="fl-select-minimal"></select>
+                    <select id="cardSelectMetrica" class="fl-select-minimal">
+                        <option value="bruto">Métrica: Desempenho (FPS / Pts)</option>
+                        <option value="custo_ponto" selected>Métrica: Custo por FPS (R$)</option>
+                    </select>
+                    <div id="cardPillsMetrica" class="fl-pills" style="display:none;"></div>
+                    <select id="cardSelectFaixa" class="fl-select-minimal" style="display:none;"></select>
+                    <div id="cardPillsFaixa" class="fl-pills" style="display:none;"></div>
+                    <span class="metric-guidance-badge" id="metricGuidanceCard">Maior é melhor</span>
+                </div>
+
+                <div class="fl-caption" id="previewCaption"></div>
+
+                <!-- Barra de seleção de séries -->
+                <div class="fl-series-picker" id="seriesPickerContainer">
+                    <div class="fl-series-input-box" id="seriesInputBox">
+                        <div id="seriesChips" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
+                        <input type="text" id="seriesSearchInput" class="fl-series-search" placeholder="Filtrar ou adicionar hardware..." autocomplete="off" />
+                    </div>
+                    <div class="fl-series-dropdown" id="seriesDropdown"></div>
+                </div>
+
+                <!-- Área do Gráfico Nativo -->
+                <div id="graficoVersus" class="fl-chart-area"></div>
+
+                <div class="fl-footer fl-editable" id="previewFonte" contenteditable="true" spellcheck="false" data-placeholder="Clique para editar a fonte (aceita [texto](https://url))..." title="Clique para editar a fonte"></div>
+            </div>
+        </div>
+
+        <!-- ABA 2: PLANILHA COLORIDA EM TEMPO REAL -->
+        <div id="abaPlanilha" class="tab-pane" style="display: none;">
+            <div class="legend-bar">
+                <div class="legend-item"><span class="dot" style="background: var(--color-hw);"></span><span>Hardware</span></div>
+                <div class="legend-item"><span class="dot" style="background: var(--color-teste);"></span><span>Teste ativo</span></div>
+                <div class="legend-item"><span class="dot" style="background: var(--color-preco);"></span><span>Preço</span></div>
+                <div class="legend-item"><span class="dot" style="background: var(--color-winner);"></span><span>Líder</span></div>
+                <span style="margin-left:auto; font-size:0.74rem;">Clique no cabeçalho para trocar o teste ou na linha para ocultar/exibir.</span>
+            </div>
+
+            <div class="table-wrapper">
+                <table class="data-sheet" id="tabelaDados">
+                    <thead></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const MODO_SO_DESEMPENHO = false;
+    let workbookGlobal = null;
+    let cabecalhosPrincipaisWorkbook = null;
+    let matrizBrutaAba = [];
+    let tabelaInvertida = false;
+    let dadosAtuais = [];
+    let colunasAtuais = [];
+    let indicesSelecionados = new Set();
+    let selecaoAlteradaManualmente = false;
+    let nomesSelecionadosUsuario = [];
+    let abaVisualAtiva = 'abaGrafico';
+
+    const paletaFlourish = [{bg:'#2563eb',txt:'#fff'},{bg:'#dc2626',txt:'#fff'},{bg:'#16a34a',txt:'#fff'},{bg:'#f59e0b',txt:'#000'},{bg:'#7c3aed',txt:'#fff'},{bg:'#0891b2',txt:'#fff'},{bg:'#db2777',txt:'#fff'},{bg:'#65a30d',txt:'#fff'},{bg:'#ea580c',txt:'#fff'},{bg:'#475569',txt:'#fff'},{bg:'#0d9488',txt:'#fff'},{bg:'#a16207',txt:'#fff'}];
+
+    const statusArquivo = document.getElementById('statusArquivo');
+    const elUpload = document.getElementById('uploadFile');
+    const elEmptyState = document.getElementById('emptyState');
+    const btnExportar = document.getElementById('btnExportarHtml');
+    const btnTranspor = document.getElementById('btnTranspor');
+    const btnRestaurarPadrao = document.getElementById('btnRestaurarPadrao');
+    const elPreviewTitulo = document.getElementById('previewTitulo');
+    const elPreviewSubtitulo = document.getElementById('previewSubtitulo');
+    const elPreviewFonte = document.getElementById('previewFonte');
+    let fonteTextoBruto = 'Fonte: [<u>Adrenaline</u>](https://www.adrenaline.com.br/) , [<u>PC Build Wizard</u>](https://pcbuildwizard.com/build/wizard/)';
+
+    const elEstiloGrafico = document.getElementById('selectEstiloGrafico');
+    const elEsquemaCor = document.getElementById('selectEsquemaCor');
+    const elMetrica = document.getElementById('selectMetrica');
+    const elAba = document.getElementById('selectAba');
+    const elColHw = document.getElementById('selectColHardware');
+    const elColPreco = document.getElementById('selectColPreco');
+    const elTeste = document.getElementById('selectTeste');
+    const statusPrecos = document.getElementById('statusPrecos');
+    const elPrecoNome = document.getElementById('selectPrecoNome');
+    const elPrecoValor = document.getElementById('selectPrecoValor');
+    const PRECO_COL = 'Preço (base CSV)';
+    const elJogo = document.getElementById('selectJogo');
+    const elRes = document.getElementById('selectResolucao');
+    const elResPadrao = document.getElementById('selectResPadrao');
+    const cardSelectJogo = document.getElementById('cardSelectJogo');
+    const cardSelectRes = document.getElementById('cardSelectRes');
+    const cardPillsRes = document.getElementById('cardPillsRes');
+    const cardPillsMetrica = document.getElementById('cardPillsMetrica');
+    const elModoPreco = document.getElementById('selectModoPreco');
+    const elMaxPlacas = document.getElementById('selectMaxPlacas');
+    const elOrdem = document.getElementById('selectOrdem');
+    let jogosHab = new Set(), assinJogos = '';
+    let resDesab = new Set();
+    const elPosNomes = document.getElementById('selectPosNomes');
+    const elCriterio = document.getElementById('selectCriterio');
+    const elAutoH = document.getElementById('chkAutoHTelefone');
+    const elUsarPills = document.getElementById('chkUsarPills');
+    const elCompRelativa = document.getElementById('chkCompRelativa');
+    const elLinhaRef = document.getElementById('selectLinhaRef');
+    const elLinhaRefValor = document.getElementById('inputLinhaRefValor');
+    const elLinhaRefRotulo = document.getElementById('inputLinhaRefRotulo');
+    const btnSortearCores = document.getElementById('btnSortearCores');
+    const elBarrasBusca = document.getElementById('barrasBusca');
+    const elListaBarras = document.getElementById('listaBarras');
+    const elPrincipal = document.getElementById('selectPrincipal');
+    const elCorPrincipal = document.getElementById('corPrincipal');
+    let principalNome = '', assinPrincipal = '';
+    const elFaixaPreco = document.getElementById('selectFaixaPreco');
+    const elInfoFaixa = document.getElementById('infoFaixaPreco');
+    const elFaixaNoCard = document.getElementById('chkFaixaNoCard');
+    const cardSelectFaixa = document.getElementById('cardSelectFaixa');
+    const cardPillsFaixa = document.getElementById('cardPillsFaixa');
+    const FAIXAS_PILL = { 'todas': 'Todas', '0-1500': 'Até 1.500', '1500-2000': '1.500–2.000', '2000-3000': '2.000–3.000', '3000-4000': '3.000–4.000', '4000-5500': '4.000–5.500', '5500-8000': '5.500–8.000', '8000-15000': '8.000–15.000', '15000-': 'Acima de 15.000' };
+    function faixasParaCard() {
+        return Array.from(elFaixaPreco.options).map(o => ({
+            v: o.value,
+            p: FAIXAS_PILL[o.value] || o.textContent,
+            t: o.value === 'todas' ? 'Faixa: todas' : 'Faixa: ' + o.textContent
+        }));
+    }
+    function faixaVisivelNoCard() { return elFaixaNoCard.checked && !MODO_SO_DESEMPENHO && !!elColPreco.value; }
+
+    // ---------- Faixa de preço (intervalo [min, max): o limite inferior entra, o superior não) ----------
+    function faixaAtual() {
+        const v = elFaixaPreco.value;
+        if (!v || v === 'todas' || !elColPreco.value) return null;
+        const partes = v.split('-');
+        return { min: parseFloat(partes[0]), max: partes[1] === '' ? Infinity : parseFloat(partes[1]) };
+    }
+    function precoDaLinha(idx) {
+        const l = dadosAtuais[idx];
+        return (l && elColPreco.value) ? limparNumero(l[elColPreco.value]) : NaN;
+    }
+    function passaFaixaPreco(idx) {
+        const f = faixaAtual();
+        if (!f) return true;
+        const p = precoDaLinha(idx);
+        return p > 0 && p >= f.min && p < f.max;
+    }
+    function atualizarInfoFaixa() {
+        const temPreco = !!elColPreco.value && dadosAtuais.length > 0;
+        elFaixaPreco.disabled = !temPreco;
+        if (!temPreco) { elInfoFaixa.textContent = 'Carregue a base de preços para usar este filtro.'; return; }
+        const comPreco = dadosAtuais.filter((_, i) => precoDaLinha(i) > 0).length;
+        if (!faixaAtual()) { elInfoFaixa.textContent = comPreco + ' hardwares com preço na base.'; return; }
+        const naFaixa = dadosAtuais.filter((_, i) => passaFaixaPreco(i)).length;
+        elInfoFaixa.textContent = naFaixa + ' de ' + comPreco + ' hardwares nesta faixa. Itens sem preço ficam de fora.';
+    }
+    function aplicarFaixaEscolhida() {
+        atualizarInfoFaixa();
+        if (!dadosAtuais.length) return;
+        selecaoAlteradaManualmente = false;
+        nomesSelecionadosUsuario = [];
+        selecionarPadrao();
+        atualizarTudo();
+    }
+    elFaixaPreco.addEventListener('change', aplicarFaixaEscolhida);
+    cardSelectFaixa.addEventListener('change', () => { elFaixaPreco.value = cardSelectFaixa.value; aplicarFaixaEscolhida(); });
+    elFaixaNoCard.addEventListener('change', () => { if (dadosAtuais.length) renderizarPillsControles(); });
+
+    // =========================================================================
+    //  EDIÇÃO DIRETA NO CARD (WYSIWYG)
+    // =========================================================================
+    [elPreviewTitulo, elPreviewSubtitulo, elPreviewFonte].forEach(el => {
+        el.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                el.blur();
+            }
+        });
+        el.addEventListener('paste', (e) => {
+            e.preventDefault();
+            const txt = (e.clipboardData || window.clipboardData).getData('text/plain');
+            document.execCommand('insertText', false, txt.replace(/\r?\n/g, ' '));
+        });
+    });
+
+    elPreviewFonte.addEventListener('focus', () => {
+        elPreviewFonte.textContent = fonteTextoBruto;
+    });
+    elPreviewFonte.addEventListener('input', () => {
+        fonteTextoBruto = elPreviewFonte.textContent;
+    });
+    elPreviewFonte.addEventListener('blur', () => {
+        fonteTextoBruto = elPreviewFonte.textContent.trim();
+        elPreviewFonte.innerHTML = linkificar(fonteTextoBruto);
+    });
+
+    function textoContraste(hex) {
+        const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || '');
+        if (!m) return '#ffffff';
+        const lum = (0.299 * parseInt(m[1], 16) + 0.587 * parseInt(m[2], 16) + 0.114 * parseInt(m[3], 16)) / 255;
+        return lum > 0.6 ? '#0f172a' : '#ffffff';
+    }
+    function nomeDaLinha(linha, idx) { return String((linha && linha[elColHw.value]) || ('Linha ' + (idx + 1))); }
+    function idxPrincipal() {
+        if (!principalNome) return -1;
+        return dadosAtuais.findIndex((l, i) => nomeDaLinha(l, i) === principalNome);
+    }
+    function popularPrincipal() {
+        const nomes = dadosAtuais.map((l, i) => nomeDaLinha(l, i));
+        const assin = elColHw.value + '|' + nomes.join('\u0001');
+        if (assin === assinPrincipal) return;
+        assinPrincipal = assin;
+        elPrincipal.innerHTML = '';
+        const o0 = document.createElement('option'); o0.value = ''; o0.textContent = 'Nenhuma'; elPrincipal.appendChild(o0);
+        nomes.forEach(n => { const o = document.createElement('option'); o.value = n; o.textContent = n; elPrincipal.appendChild(o); });
+        if (!nomes.includes(principalNome)) principalNome = '';
+        elPrincipal.value = principalNome;
+        elPrincipal.disabled = nomes.length === 0;
+        elCorPrincipal.disabled = !principalNome;
+    }
+    elPrincipal.addEventListener('change', () => {
+        principalNome = elPrincipal.value;
+        elCorPrincipal.disabled = !principalNome;
+        const idx = idxPrincipal();
+        if (idx >= 0 && !indicesSelecionados.has(idx)) {
+            indicesSelecionados.add(idx);
+            selecaoAlteradaManualmente = true;
+            salvarSelecaoUsuario();
+        }
+        if (dadosAtuais.length) atualizarTudo();
+    });
+    elCorPrincipal.addEventListener('input', () => { if (dadosAtuais.length) atualizarTudo(); });
+    const LIMITE_BARRAS_TELEFONE = 6;
+    const LARGURA_TELEFONE = 560;
+
+    function embaralharPaleta(seed) {
+        const a = paletaFlourish.slice(); let s = seed >>> 0;
+        const rnd = () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+        for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+        return a;
+    }
+    let paletaAleatoria = embaralharPaleta(Math.floor(Math.random() * 1e9) + 1);
+
+    function prepararVisual(itens, cfg) {
+        var orient = cfg.orient;
+        if (orient === 'v' && cfg.auto && cfg.largura < cfg.larguraTelefone && itens.length >= cfg.limite) orient = 'h';
+        var inverter = orient === 'v' ? cfg.lado === 'dir' : cfg.lado === 'esq';
+        return { itens: inverter ? itens.slice().reverse() : itens, orient: orient };
+    }
+    function cfgVisual() {
+        return { orient: elEstiloGrafico.value, auto: elAutoH.checked, limite: LIMITE_BARRAS_TELEFONE, larguraTelefone: LARGURA_TELEFONE, largura: window.innerWidth, lado: elOrdem.value };
+    }
+    function cfgLinhaRef() {
+        return {
+            modo: elLinhaRef.value,
+            valor: parseFloat(elLinhaRefValor.value),
+            rotulo: elLinhaRefRotulo.value.trim()
+        };
+    }
+    function ordemBase() { return elCriterio.value === 'az' ? 'az' : 'valor_desc'; }
+    let precosHist = null;
+    let rotuloPrecoAtual = '';
+    let testeMeta = null;
+    let nomeAbaAtual = '';
+    let precosMatriz = null;
+
+    const cardSelectTeste = document.getElementById('cardSelectTeste');
+    const cardSelectMetrica = document.getElementById('cardSelectMetrica');
+    const seriesSearchInput = document.getElementById('seriesSearchInput');
+    const seriesDropdown = document.getElementById('seriesDropdown');
+    const seriesChips = document.getElementById('seriesChips');
+    const seriesInputBox = document.getElementById('seriesInputBox');
+
+    // =========================================================================
+    //  CLASSIFICADOR AUTOMÁTICO DE CATEGORIA / SOCKET / SÉRIE (CPUs e GPUs)
+    // =========================================================================
+    function classificarHardware(nomeHardware, categoriaExplicita) {
+        const texto = String((categoriaExplicita || '') + ' ' + (nomeHardware || '')).toLowerCase().trim();
+
+        if (/\bam5\b/.test(texto)) return { cat: 'AMD AM5', bg: '#ff0000', txt: '#ffffff' };
+        if (/\bam4\b/.test(texto)) return { cat: 'AMD AM4', bg: '#ff4e2f', txt: '#ffffff' };
+        if (/\blga\s*1851\b/.test(texto)) return { cat: 'Intel LGA1851', bg: '#0000ff', txt: '#ffffff' };
+        if (/\blga\s*1700\b/.test(texto)) return { cat: 'Intel LGA1700', bg: '#1e90ff', txt: '#ffffff' };
+        if (/\blga\s*1200\b/.test(texto)) return { cat: 'Intel LGA1200', bg: '#87cefa', txt: '#0f172a' };
+
+        const mRx = texto.match(/\brx\s*(\d)(\d{2,3})(?!\d)/);
+        if (mRx) {
+            const serieRx = mRx[1];
+            const restoDigitos = mRx[2];
+            if (serieRx === '9') return { cat: 'RX 9000', bg: '#e60000', txt: '#ffffff' };
+            if (serieRx === '7') return { cat: 'RX 7000', bg: '#ff2e2e', txt: '#ffffff' };
+            if (serieRx === '6') return { cat: 'RX 6000', bg: '#ff4d4d', txt: '#ffffff' };
+            if (serieRx === '5') {
+                if (restoDigitos.length === 3) return { cat: 'RX 5000', bg: '#ff8080', txt: '#0f172a' };
+                return { cat: 'RX 500', bg: '#ffb3b3', txt: '#0f172a' };
+            }
+            if (serieRx === '4') return { cat: 'RX 400', bg: '#ffb3b3', txt: '#0f172a' };
+        }
+
+        const mRtx = texto.match(/\b(rtx|gtx|gt)\s*(\d{2})\d{2}(?!\d)/);
+        if (mRtx) {
+            const serieNv = mRtx[2];
+            if (serieNv === '50') return { cat: 'RTX 5000', bg: '#3ca30f', txt: '#ffffff' };
+            if (serieNv === '40') return { cat: 'RTX 4000', bg: '#4dd214', txt: '#0f172a' };
+            if (serieNv === '30') return { cat: 'RTX 3000', bg: '#88f05c', txt: '#0f172a' };
+            if (serieNv === '20' || serieNv === '16' || serieNv === '10') return { cat: 'RTX 2000/16/10', bg: '#aaf48a', txt: '#0f172a' };
+        }
+
+        const mArc = texto.match(/\b(?:arc\s*)?([ab])(3\d{2}|5\d{2}|7\d{2})(?!\d)/);
+        if (mArc && (/arc/.test(texto) || /\b[ab](380|570|580|750|770|500|700)\b/.test(texto))) {
+            if (mArc[1] === 'b') return { cat: 'Arc B500', bg: '#0045e6', txt: '#ffffff' };
+            return { cat: 'Arc A700', bg: '#1a71ff', txt: '#ffffff' };
+        }
+
+        const mRyzen = texto.match(/\bryzen\s*(?:[3579]\s*(?:pro\s*)?)?(\d)\d{3}/);
+        if (mRyzen) {
+            const genRyzen = parseInt(mRyzen[1], 10);
+            if (genRyzen >= 7) return { cat: 'AMD AM5', bg: '#ff0000', txt: '#ffffff' };
+            return { cat: 'AMD AM4', bg: '#ff4e2f', txt: '#ffffff' };
+        }
+
+        if (/\bcore\s*ultra\b/.test(texto)) {
+            return { cat: 'Intel LGA1851', bg: '#0000ff', txt: '#ffffff' };
+        }
+
+        const mCore = texto.match(/\bcore\s*i[3579][-\s]*(\d{1,2})\d{3}/);
+        if (mCore) {
+            const genCore = parseInt(mCore[1], 10);
+            if (genCore >= 12 && genCore <= 14) return { cat: 'Intel LGA1700', bg: '#1e90ff', txt: '#ffffff' };
+            if (genCore === 10 || genCore === 11) return { cat: 'Intel LGA1200', bg: '#87cefa', txt: '#0f172a' };
+            return { cat: 'Intel LGA115x', bg: '#87cefa', txt: '#0f172a' };
+        }
+
+        if (/\bxeon\b/.test(texto)) {
+            return { cat: 'Intel Xeon', bg: '#8a4aff', txt: '#ffffff' };
+        }
+
+        if (/nvidia|geforce|rtx|gtx|titan/.test(texto)) return { cat: 'NVIDIA', bg: '#3ca30f', txt: '#ffffff' };
+        if (/amd|ryzen|radeon|\brx\b|threadripper|epyc|athlon/.test(texto)) return { cat: 'AMD', bg: '#e60000', txt: '#ffffff' };
+        if (/intel|core|ultra|\barc\b|\bi[3579]\b|pentium|celeron/.test(texto)) return { cat: 'Intel', bg: '#1a71ff', txt: '#ffffff' };
+        return { cat: 'Outros', bg: '#64748b', txt: '#ffffff' };
+    }
+
+    function obterCategoriaLinha(linha) {
+        if (!linha) return '';
+        const colCat = colunasAtuais.find(c => /^(socket|soquete|serie|série|geracao|geração|categoria|plataforma|arquitetura)$/i.test(norm(c)));
+        return colCat ? String(linha[colCat] || '') : '';
+    }
+
+    function obterEstiloCor(nomeHardware, pos, esquema, categoriaExplicita) {
+        const infoGen = classificarHardware(nomeHardware, categoriaExplicita);
+        if (principalNome && String(nomeHardware) === principalNome) {
+            return { bg: elCorPrincipal.value, txt: textoContraste(elCorPrincipal.value), cat: infoGen.cat, principal: true };
+        }
+        if (esquema === 'geracoes') {
+            return infoGen;
+        }
+        if (esquema === 'flourish') {
+            const p = paletaAleatoria[pos % paletaAleatoria.length];
+            return { bg: p.bg, txt: p.txt, cat: infoGen.cat };
+        }
+        const nome = String(nomeHardware).toLowerCase();
+        if (/nvidia|geforce|rtx|gtx|titan/i.test(nome)) return { bg: '#1a8000', txt: '#ffffff', cat: infoGen.cat };
+        if (/amd|ryzen|radeon|\brx\b|threadripper|epyc|athlon/i.test(nome)) return { bg: '#f00000', txt: '#ffffff', cat: infoGen.cat };
+        if (/intel|core|ultra|\barc\b|\bi[3579]\b|xeon|pentium|celeron/i.test(nome)) return { bg: '#1010ff', txt: '#ffffff', cat: infoGen.cat };
+        return { bg: '#64748b', txt: '#ffffff', cat: infoGen.cat };
+    }
+
+    function salvarSelecaoUsuario() {
+        const colHw = elColHw.value;
+        nomesSelecionadosUsuario = Array.from(indicesSelecionados)
+            .map(i => dadosAtuais[i] ? norm(dadosAtuais[i][colHw]) : '')
+            .filter(Boolean);
+    }
+
+    function restaurarSelecaoUsuario() {
+        if (!selecaoAlteradaManualmente || !nomesSelecionadosUsuario.length) return false;
+        const colHw = elColHw.value;
+        const novosIndices = [];
+        nomesSelecionadosUsuario.forEach(nomeNorm => {
+            const idx = dadosAtuais.findIndex(l => norm(l[colHw]) === nomeNorm);
+            if (idx !== -1 && !novosIndices.includes(idx)) novosIndices.push(idx);
+        });
+        if (novosIndices.length > 0) {
+            indicesSelecionados = new Set(novosIndices);
+            return true;
+        }
+        return false;
+    }
+
+    // Alternância de Abas
+    document.querySelectorAll('.browser-tab').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.browser-tab').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            abaVisualAtiva = btn.dataset.target;
+
+            if (dadosAtuais.length > 0) {
+                document.getElementById('abaGrafico').style.display = abaVisualAtiva === 'abaGrafico' ? 'block' : 'none';
+                document.getElementById('abaPlanilha').style.display = abaVisualAtiva === 'abaPlanilha' ? 'block' : 'none';
+            }
+        });
+    });
+
+    // =========================================================================
+    //  UPLOAD ÚNICO INTELIGENTE (ACEITA 1 OU MÚLTIPLOS ARQUIVOS)
+    // =========================================================================
+    window.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        elEmptyState.classList.add('dragover');
+    });
+    window.addEventListener('dragleave', (e) => {
+        if (e.relatedTarget === null) elEmptyState.classList.remove('dragover');
+    });
+    window.addEventListener('drop', (e) => {
+        e.preventDefault();
+        elEmptyState.classList.remove('dragover');
+        if (e.dataTransfer.files && e.dataTransfer.files.length) {
+            lerArquivosInteligente(e.dataTransfer.files);
+        }
+    });
+
+    elUpload.addEventListener('change', function(e) {
+        if (e.target.files && e.target.files.length) {
+            lerArquivosInteligente(e.target.files);
+        }
+        e.target.value = '';
+    });
+
+    function lerArquivosInteligente(fileList) {
+        Array.from(fileList).forEach(file => lerFicheiro(file));
+    }
+
+    function ehBasePrecosSimples(matriz, nomeArquivo) {
+        if (!matriz || matriz.length < 2) return false;
+        const nCols = Math.max(...matriz.slice(0, 20).map(r => r.length));
+        if (nCols < 2 || nCols > 5) return false;
+
+        const header = matriz[0].map(c => String(c || '').trim());
+        const rows = matriz.slice(1);
+
+        // Se algum cabeçalho indicar resolução ou benchmark conhecido, não é lista simples de preços
+        const temTermoTeste = header.some(h => famRes(h) || /\b(fps|1080p|1440p|4k|2k|cinebench|3dmark|blender|pontos|score)\b/i.test(norm(h)));
+        if (temTermoTeste) return false;
+
+        let colsNumericas = 0;
+        let temColPreco = false;
+        for (let c = 0; c < nCols; c++) {
+            const h = header[c] || '';
+            if (ehColunaDePrecoBruto(h)) temColPreco = true;
+            const vals = rows.map(r => r[c]).filter(v => !vazia(v));
+            if (vals.length && vals.filter(v => /\d/.test(String(v)) && !isNaN(limparNumero(v))).length / vals.length > 0.65) {
+                colsNumericas++;
+            }
+        }
+        if (temColPreco && colsNumericas === 1) return true;
+        if (/prec|preç|price|valor|custo/i.test(String(nomeArquivo || '')) && colsNumericas === 1 && nCols <= 4) return true;
+        return false;
+    }
+
+    function mostrarStatus(msg, tipo = 'info') {
+        statusArquivo.textContent = msg;
+        if (tipo === 'erro') {
+            statusArquivo.style.background = 'rgba(239, 68, 68, 0.18)';
+            statusArquivo.style.color = '#fca5a5';
+        } else if (tipo === 'sucesso') {
+            statusArquivo.style.background = 'rgba(0, 204, 150, 0.14)';
+            statusArquivo.style.color = '#6ee7b7';
+        } else {
+            statusArquivo.style.background = 'rgba(255, 255, 255, 0.06)';
+            statusArquivo.style.color = '#a1a1aa';
+        }
+    }
+
+    function decodificarTexto(buf) {
+        let t;
+        try { t = new TextDecoder('utf-8', { fatal: true }).decode(buf); }
+        catch (e) { t = new TextDecoder('windows-1252').decode(buf); }
+        return t.replace(/^\uFEFF/, '');
+    }
+
+    function parseCSV(texto) {
+        const primeira = (texto.split(/\r?\n/).find(l => l.trim() !== '') || '');
+        let sep = ',', max = -1;
+        ['\t', ';', ','].forEach(c => {
+            const n = primeira.split(c).length - 1;
+            if (n > max) { max = n; sep = c; }
+        });
+        const rows = [];
+        let row = [], cell = '', q = false;
+        for (let i = 0; i < texto.length; i++) {
+            const c = texto[i];
+            if (q) {
+                if (c === '"') {
+                    if (texto[i + 1] === '"') { cell += '"'; i++; } else q = false;
+                } else cell += c;
+            } else if (c === '"') q = true;
+            else if (c === sep) { row.push(cell.trim()); cell = ''; }
+            else if (c === '\n' || c === '\r') {
+                if (c === '\r' && texto[i + 1] === '\n') i++;
+                row.push(cell.trim()); cell = '';
+                rows.push(row); row = [];
+            } else cell += c;
+        }
+        if (cell !== '' || row.length) { row.push(cell.trim()); rows.push(row); }
+        return rows.filter(r => r.some(c => c !== ''));
+    }
+
+    function processarTextoBruto(texto, origem) {
+        const matriz = parseCSV(texto);
+        if (detectarHistorico(matriz) || ehBasePrecosSimples(matriz, origem)) {
+            prepararPrecos(matriz);
+            return;
+        }
+        if (matriz.length < 2) {
+            mostrarStatus('O arquivo tem menos de 2 linhas preenchidas.', 'erro');
+            return;
+        }
+        workbookGlobal = null;
+        cabecalhosPrincipaisWorkbook = null;
+        matrizBrutaAba = matriz;
+        nomeAbaAtual = origem;
+        elAba.innerHTML = `<option>${origem}</option>`;
+        elAba.disabled = true;
+        btnTranspor.disabled = false;
+        btnExportar.disabled = false;
+        btnRestaurarPadrao.disabled = false;
+        tabelaInvertida = false;
+        estruturarDadosDaMatriz();
+    }
+
+    // ---------- Base de preços ----------
+    function mostrarStatusPrecos(msg, tipo = 'info') {
+        statusPrecos.textContent = msg;
+        statusPrecos.style.background = tipo === 'erro'
+            ? 'rgba(239, 68, 68, 0.18)'
+            : (tipo === 'sucesso' ? 'rgba(0, 204, 150, 0.14)' : 'rgba(171, 99, 250, 0.14)');
+        statusPrecos.style.color = tipo === 'erro'
+            ? '#fca5a5'
+            : (tipo === 'sucesso' ? '#6ee7b7' : '#d8b4fe');
+    }
+
+    function prepararPrecos(matriz) {
+        if (matriz.length < 1) { mostrarStatusPrecos('Base de preços vazia.', 'erro'); return; }
+
+        const hist = detectarHistorico(matriz);
+        if (hist) {
+            precosHist = hist;
+            precosMatriz = { historico: true, rows: hist.series };
+            const n = hist.datas.length;
+            elModoPreco.innerHTML = '';
+            const add = (v, t) => { const o = document.createElement('option'); o.value = v; o.textContent = t; elModoPreco.appendChild(o); };
+            add('media', `Média do período (${n} datas)`);
+            add('ultimo', `Mais recente (${hist.datas[n - 1]})`);
+            add('menor', 'Menor preço do período');
+            hist.datas.forEach((d, i) => add('data:' + i, 'Preço em ' + d));
+            elModoPreco.value = 'media';
+            document.getElementById('grpModoPreco').style.display = 'flex';
+            elPrecoNome.innerHTML = '<option>(automático — histórico)</option>';
+            elPrecoValor.innerHTML = '<option>(automático — histórico)</option>';
+            elPrecoNome.disabled = true;
+            elPrecoValor.disabled = true;
+            reaplicarPrecosNaTela();
+            return;
+        }
+        precosHist = null;
+        document.getElementById('grpModoPreco').style.display = 'none';
+
+        const nCols = Math.max(...matriz.map(r => r.length));
+        let headers = matriz[0].map(c => String(c).trim());
+        let rows = matriz.slice(1);
+
+        const temNumeroNaPrimeira = matriz[0].some((c, i) => i > 0 && !isNaN(limparNumero(c)) && /\d/.test(String(c)));
+        if (temNumeroNaPrimeira) {
+            headers = Array.from({ length: nCols }, (_, i) => `Coluna ${i + 1}`);
+            rows = matriz;
+        }
+        while (headers.length < nCols) headers.push(`Coluna ${headers.length + 1}`);
+        headers = headers.map((h, i) => h || `Coluna ${i + 1}`);
+
+        const ehNumerica = (i) => {
+            const vals = rows.map(r => r[i]).filter(v => v !== undefined && String(v).trim() !== '');
+            if (!vals.length) return false;
+            return vals.filter(v => /\d/.test(String(v)) && !isNaN(limparNumero(v))).length / vals.length > 0.7;
+        };
+
+        precosMatriz = { headers, rows };
+        popularSelect(elPrecoNome, headers);
+        popularSelect(elPrecoValor, headers);
+
+        let iNome = headers.findIndex(h => /hardware|modelo|nome|produto|item|gpu|cpu|placa|processador/i.test(h));
+        if (iNome === -1) iNome = headers.findIndex((_, i) => !ehNumerica(i));
+        if (iNome === -1) iNome = 0;
+        let iPreco = headers.findIndex(h => /prec|preç|valor|custo|r\$/i.test(h));
+        if (iPreco === -1) iPreco = headers.findIndex((_, i) => i !== iNome && ehNumerica(i));
+        if (iPreco === -1) iPreco = Math.min(1, headers.length - 1);
+
+        elPrecoNome.selectedIndex = iNome;
+        elPrecoValor.selectedIndex = iPreco;
+        elPrecoNome.disabled = false;
+        elPrecoValor.disabled = false;
+
+        reaplicarPrecosNaTela();
+    }
+
+    [elPrecoNome, elPrecoValor, elModoPreco].forEach(el => el.addEventListener('change', reaplicarPrecosNaTela));
+
+    function reaplicarPrecosNaTela() {
+        if (dadosAtuais.length === 0) {
+            mostrarStatusPrecos(precosHist
+                ? `Preços: ${precosHist.series.length} itens (${precosHist.datas[0]} → ${precosHist.datas.slice(-1)[0]})`
+                : `Preços: ${precosMatriz.rows.length} linhas carregadas`, 'sucesso');
+            return;
+        }
+        const testeAtual = elTeste.value;
+        aplicarPrecos(true);
+        atualizarColunasDeTeste();
+        if ([...elTeste.options].some(o => o.value === testeAtual)) {
+            elTeste.value = testeAtual;
+            cardSelectTeste.value = testeAtual;
+        }
+        if (faixaAtual() && !selecaoAlteradaManualmente) selecionarPadrao();
+        atualizarTudo();
+    }
+
+    const PALAVRAS_IGNORADAS = new Set(['nvidia', 'geforce', 'amd', 'radeon', 'intel', 'core', 'ryzen', 'arc', 'graphics', 'placa', 'de', 'video', 'processador', 'gpu', 'cpu']);
+    const VARIANTES = new Set(['ti', 'super', 'xt', 'xtx', 'gre', 'x3d', 'x3d2', 'ks', 'kf', 'k', 'f', 'g', 'gt', 't', 'plus', 'pro']);
+
+    function tokens(txt) {
+        return String(txt).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+            .replace(/\bx\s*3\s*d\s*2\b/g, 'x3d2')
+            .replace(/\bx\s*3\s*d\b/g, 'x3d')
+            .replace(/(\d+)\s*g\s*b?\b/g, '$1gb')
+            .replace(/([a-z])(\d)/g, '$1 $2').replace(/(\d)([a-z])/g, '$1 $2')
+            .replace(/(\d+)\s+gb\b/g, '$1gb')
+            .replace(/\bx\s+3\s+d\s+2\b/g, 'x3d2')
+            .replace(/\bx\s+3\s+d\b/g, 'x3d')
+            .replace(/[^a-z0-9]+/g, ' ').trim().split(' ')
+            .filter(t => t && !PALAVRAS_IGNORADAS.has(t));
+    }
+
+    function acharPreco(nomeHw, catalogo) {
+        const tk = tokens(nomeHw);
+        if (!tk.length) return null;
+        const chave = [...tk].sort().join(' ');
+        const vramHw = tk.find(t => /^\d+gb$/.test(t));
+        let melhores = [], menorExtra = Infinity;
+
+        for (const item of catalogo) {
+            if (item.chave === chave) return { item };
+            const vramItem = item.tk.find(t => /^\d+gb$/.test(t));
+            if (vramHw && vramItem && vramHw !== vramItem) continue;
+
+            const semVramHw = tk.filter(t => !/^\d+gb$/.test(t));
+            const semVramItem = item.tk.filter(t => !/^\d+gb$/.test(t));
+            const [menor, maior] = semVramItem.length <= semVramHw.length ? [semVramItem, semVramHw] : [semVramHw, semVramItem];
+            if (!menor.length || !menor.every(t => maior.includes(t))) continue;
+
+            const extras = maior.filter(t => !menor.includes(t));
+            if (extras.some(t => VARIANTES.has(t))) continue;
+
+            const penalidadeVram = (vramHw && vramItem && vramHw === vramItem) ? -0.5 : 0;
+            const custoExtra = extras.length + penalidadeVram;
+            if (custoExtra < menorExtra) { menorExtra = custoExtra; melhores = [item]; }
+            else if (custoExtra === menorExtra) melhores.push(item);
+        }
+        if (!melhores.length) return null;
+        melhores.sort((a, b) => a.preco - b.preco);
+        return { item: melhores[0] };
+    }
+
+    // ---------- Histórico de preços ----------
+    const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+
+    function lerDataBruta(v) {
+        if (typeof v === 'number' && v > 30000 && v < 70000) {
+            const d = new Date(Math.round((v - 25569) * 86400000));
+            return { m: d.getUTCMonth() + 1, y: d.getUTCFullYear(), amb: false };
+        }
+        const t = String(v).trim();
+        let m = t.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})$/);
+        if (m) return { m: +m[2], y: +m[1], amb: false };
+        m = t.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})$/);
+        if (m) return { a: +m[1], b: +m[2], y: +m[3], amb: true };
+        return null;
+    }
+
+    function detectarHistorico(matriz) {
+        if (!matriz || matriz.length < 3) return null;
+        const header = matriz[0].map(c => String(c).trim());
+        if (header.slice(1).filter(h => h && !ehNum(h)).length < 3) return null;
+        const linhas = matriz.slice(1);
+        const datas = linhas.map(r => lerDataBruta(r[0]));
+        if (datas.filter(Boolean).length / linhas.length < 0.7) return null;
+
+        const am = datas.filter(d => d && d.amb);
+        let mesEhA = false;
+        if (am.length) {
+            if (am.some(d => d.a > 12)) mesEhA = false;
+            else if (am.some(d => d.b > 12)) mesEhA = true;
+            else mesEhA = new Set(am.map(d => d.a)).size > new Set(am.map(d => d.b)).size;
+            am.forEach(d => { d.m = mesEhA ? d.a : d.b; });
+        }
+        const rotulos = datas.map((d, i) => d ? (MESES[(d.m || 1) - 1] + '/' + d.y) : String(linhas[i][0]));
+
+        const series = [];
+        for (let j = 1; j < header.length; j++) {
+            if (!header[j] || ehNum(header[j])) continue;
+            const valores = linhas.map(r => (vazia(r[j]) ? NaN : limparNumero(r[j])));
+            if (valores.some(x => !isNaN(x) && x > 0)) series.push({ nome: header[j], valores });
+        }
+        if (series.length < 3) return null;
+        return { datas: rotulos, series };
+    }
+
+    function montarCatalogo() {
+        const cat = [];
+        if (precosHist) {
+            const modo = elModoPreco.value || 'media';
+            const nDatas = precosHist.datas.length;
+            precosHist.series.forEach(se => {
+                const v = se.valores;
+                const validos = v.filter(x => !isNaN(x) && x > 0);
+                let p = NaN;
+                if (modo === 'ultimo') {
+                    for (let i = v.length - 1; i >= 0; i--) if (!isNaN(v[i]) && v[i] > 0) { p = v[i]; break; }
+                } else if (modo === 'media') {
+                    if (validos.length) p = validos.reduce((a, b) => a + b, 0) / validos.length;
+                } else if (modo === 'menor') {
+                    if (validos.length) p = Math.min(...validos);
+                } else if (modo.startsWith('data:')) {
+                    const x = v[parseInt(modo.slice(5), 10)];
+                    if (!isNaN(x) && x > 0) p = x;
+                }
+                if (isNaN(p)) return;
+                const tk = tokens(se.nome);
+                cat.push({ nome: se.nome, preco: Math.round(p * 100) / 100, tk, chave: [...tk].sort().join(' ') });
+            });
+            const ult = precosHist.datas[nDatas - 1];
+            if (modo === 'ultimo') rotuloPrecoAtual = `Mais recente (${ult})`;
+            else if (modo === 'media') rotuloPrecoAtual = `Média (${precosHist.datas[0]}–${ult})`;
+            else if (modo === 'menor') rotuloPrecoAtual = `Menor (${precosHist.datas[0]}–${ult})`;
+            else rotuloPrecoAtual = `${precosHist.datas[parseInt(modo.slice(5), 10)]}`;
+            return cat;
+        }
+        rotuloPrecoAtual = '';
+        const iN = elPrecoNome.selectedIndex, iP = elPrecoValor.selectedIndex;
+        precosMatriz.rows.forEach(r => {
+            const nome = r[iN], preco = limparNumero(r[iP]);
+            if (nome === undefined || String(nome).trim() === '' || isNaN(preco)) return;
+            const tk = tokens(nome);
+            cat.push({ nome: String(nome), preco, tk, chave: [...tk].sort().join(' ') });
+        });
+        return cat;
+    }
+
+    function ehColunaDePrecoBruto(nomeCol) {
+        const t = norm(nomeCol);
+        if (/por fps|por ponto|custo\/|r\$\/fps/.test(t)) return false;
+        return /^(preco|valor|custo\b|r\$)/.test(t) || (/\b(preco|valor)\b/.test(t) && !/fps|ponto|cinebench|game/.test(t));
+    }
+
+    function aplicarPrecos(forcarSelecao) {
+        colunasAtuais = colunasAtuais.filter(c => c !== PRECO_COL);
+        dadosAtuais.forEach(l => { delete l[PRECO_COL]; });
+
+        if (precosMatriz && dadosAtuais.length) {
+            const catalogo = montarCatalogo();
+            const colHw = elColHw.value;
+            let achados = 0;
+            const semPreco = [];
+            dadosAtuais.forEach(l => {
+                const nome = String(l[colHw] || '').trim();
+                if (!nome) { l[PRECO_COL] = ''; return; }
+                const m = acharPreco(nome, catalogo);
+                if (m && m.item) { l[PRECO_COL] = m.item.preco; achados++; }
+                else { l[PRECO_COL] = ''; semPreco.push(nome); }
+            });
+            colunasAtuais.push(PRECO_COL);
+
+            const total = achados + semPreco.length;
+            let msg = `Preços: ${achados}/${total}` + (rotuloPrecoAtual ? ` · ${rotuloPrecoAtual}` : '');
+            statusPrecos.title = semPreco.length ? `Sem preço: ${semPreco.join(', ')}` : '';
+            mostrarStatusPrecos(msg, semPreco.length ? 'info' : 'sucesso');
+        }
+
+        popularSelect(elColPreco, colunasAtuais, true);
+        elColPreco.value = (precosMatriz && !MODO_SO_DESEMPENHO && colunasAtuais.includes(PRECO_COL)) ? PRECO_COL : '';
+    }
+
+    function lerFicheiro(file) {
+        if (/\.(csv|tsv|txt)$/i.test(file.name)) {
+            const readerTxt = new FileReader();
+            readerTxt.onload = (ev) => processarTextoBruto(decodificarTexto(ev.target.result), file.name);
+            readerTxt.onerror = () => mostrarStatus('Não foi possível ler o arquivo. Feche-o no Excel se estiver aberto.', 'erro');
+            readerTxt.readAsArrayBuffer(file);
+            return;
+        }
+
+        if (typeof XLSX === 'undefined') {
+            mostrarStatus('Biblioteca Excel indisponível. Salve a planilha como .csv e carregue novamente.', 'erro');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onerror = function() {
+            mostrarStatus('Arquivo bloqueado. Feche o arquivo no Excel antes de carregar.', 'erro');
+        };
+
+        reader.onload = function(event) {
+            try {
+                const data = new Uint8Array(event.target.result);
+                const wb = XLSX.read(data, { type: 'array' });
+                const m0 = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' })
+                    .filter(r => Array.isArray(r) && r.some(c => !vazia(c)));
+
+                // Detecção inteligente também em planilhas .xlsx/.xls
+                if (wb.SheetNames.length === 1 && (detectarHistorico(m0) || ehBasePrecosSimples(m0, file.name))) {
+                    prepararPrecos(m0);
+                    return;
+                }
+
+                workbookGlobal = wb;
+                cabecalhosPrincipaisWorkbook = null;
+                if (m0.length >= 4 && vazia(m0[0][0])) {
+                    cabecalhosPrincipaisWorkbook = m0.slice(0, 3);
+                }
+
+                elAba.innerHTML = '';
+                workbookGlobal.SheetNames.forEach(nome => {
+                    const opt = document.createElement('option');
+                    opt.value = nome;
+                    opt.textContent = nome;
+                    elAba.appendChild(opt);
+                });
+
+                elAba.disabled = false;
+                btnTranspor.disabled = false;
+                btnExportar.disabled = false;
+                btnRestaurarPadrao.disabled = false;
+                tabelaInvertida = false;
+
+                carregarAba(workbookGlobal.SheetNames[0]);
+            } catch (err) {
+                mostrarStatus(`Erro ao ler planilha: ${err.message}`, 'erro');
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    elAba.addEventListener('change', (e) => {
+        tabelaInvertida = false;
+        carregarAba(e.target.value);
+    });
+
+    btnTranspor.addEventListener('click', () => {
+        tabelaInvertida = !tabelaInvertida;
+        estruturarDadosDaMatriz();
+    });
+
+    btnRestaurarPadrao.addEventListener('click', () => {
+        if (!dadosAtuais.length) return;
+        selecaoAlteradaManualmente = false;
+        nomesSelecionadosUsuario = [];
+        selecionarPadrao();
+        atualizarTudo();
+    });
+
+    function carregarAba(nomeAba) {
+        nomeAbaAtual = nomeAba;
+        const worksheet = workbookGlobal.Sheets[nomeAba];
+        matrizBrutaAba = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+        estruturarDadosDaMatriz();
+    }
+
+    // =====================================================================
+    //  LEITOR UNIVERSAL DE PLANILHAS (GPU & CPU, 1 NÍVEL OU MULTINÍVEL)
+    // =====================================================================
+    function norm(t) {
+        return String(t ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+    }
+
+    function famRes(txt) {
+        const t = norm(txt);
+        let b = null;
+        if (/^(full ?hd|fhd|1080p?($| |\)))/.test(t)) b = { k: '1080p', r: '1080p (Full HD)', o: 2 };
+        else if (/^(quad ?hd|qhd|wqhd|2k|1440p?($| |\)))/.test(t)) b = { k: '1440p', r: '1440p (2K / Quad HD)', o: 4 };
+        else if (/^(4k|uhd|2160p?($| |\)))/.test(t)) b = { k: '4K', r: '4K (2160p)', o: 5 };
+        else if (/^(hd($| |\()|hd ready|720p?($| |\)))/.test(t)) b = { k: '720p', r: '720p (HD)', o: 1 };
+        if (!b) return null;
+        const medio = /medio|medium|baixo|low/.test(t);
+        return { chave: b.k + (medio ? '-medio' : ''), rotulo: b.r + (medio ? ' · gráficos médios' : ''), ordem: b.o + (medio ? 0.5 : 0) };
+    }
+
+    function resEmTexto(txt) {
+        const t = norm(txt);
+        const m = t.match(/(720p|1080p|1440p|2160p|\b4k\b|\b2k\b|full ?hd|fhd|quad ?hd|qhd|wqhd)/);
+        if (!m) return null;
+        return famRes(m[1] + (/medio|medium/.test(t) ? ' medio' : ''));
+    }
+
+    function vazia(v) {
+        if (v === null || v === undefined) return true;
+        const s = String(v).trim();
+        return s === '' || s === 'NaT' || /^-{2,}$/.test(s);
+    }
+
+    function ehNum(v) {
+        if (typeof v === 'number') return !isNaN(v);
+        if (v instanceof Date) return false;
+        return /^\s*-?\d+([.,]\d+)?\s*$/.test(String(v));
+    }
+
+    function ehDataCelula(v) {
+        if (v instanceof Date) return true;
+        if (typeof v === 'number' && v > 40000 && v < 60000) return true;
+        const s = String(v ?? '').trim();
+        return /^\d{4}[-\/.]\d{1,2}[-\/.]\d{1,2}/.test(s) || /^\d{1,2}[-\/.]\d{1,2}[-\/.]\d{2,4}$/.test(s);
+    }
+
+    function pareceSubmetrica(txt) {
+        const t = norm(txt);
+        return /^(0[.,]01|1% ?low|0[.,]1%|min|minimo|med|media|max|maximo|fps med\.?|single-?thread|multi-?thread|comp\.?|descomp\.?|bot off|bot on|teste \d+|media 1%|latencias|cpu|cpu\+ ?memoria|max threads|4 threads)$/.test(t);
+    }
+
+    function pareceHardware(txt) {
+        if (vazia(txt) || ehNum(txt) || ehDataCelula(txt)) return false;
+        const t = norm(txt);
+        if (famRes(t) || pareceSubmetrica(t)) return false;
+        return /\b(ryzen|epyc|threadripper|athlon|core i[3579]|core ultra|pentium|celeron|xeon|rtx|gtx|gt|rx|radeon|geforce|arc|iris|apple m\d|snapdragon)\b/.test(t);
+    }
+
+    function letraColuna(i) {
+        let s = ''; i++;
+        while (i > 0) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); }
+        return s;
+    }
+
+    function analisarMultinivel(linhasOriginais) {
+        let linhas = linhasOriginais.map(r => [...r]);
+
+        let nCols = Math.max(...linhas.map(r => r.length));
+        let firstCol = 0;
+        while (firstCol < nCols && linhas.every(r => vazia(r[firstCol]))) firstCol++;
+        if (firstCol > 0) {
+            linhas = linhas.map(r => r.slice(firstCol));
+            nCols = Math.max(...linhas.map(r => r.length));
+        }
+
+        if (cabecalhosPrincipaisWorkbook && nCols === cabecalhosPrincipaisWorkbook[0].length) {
+            if (pareceHardware(linhas[0][0]) && linhas[0].slice(1).filter(c => !vazia(c) && ehNum(c)).length >= 5) {
+                linhas = [...cabecalhosPrincipaisWorkbook.map(r => [...r]), ...linhas];
+            }
+        }
+
+        if (!tabelaInvertida) {
+            let bestHwRow = -1, bestHwCount = 0;
+            for (let r = 0; r < Math.min(5, linhas.length); r++) {
+                const cnt = linhas[r].slice(1).filter(c => pareceHardware(c)).length;
+                if (cnt > bestHwCount) { bestHwCount = cnt; bestHwRow = r; }
+            }
+            const col0Hw = linhas.filter(r => pareceHardware(r[0])).length;
+            const rotulo0 = bestHwRow >= 0 ? norm(linhas[bestHwRow][0]) : '';
+            if (bestHwCount >= 2 && (bestHwCount > col0Hw || /^(processador|hardware|placa|modelo|cpu|gpu)$/.test(rotulo0))) {
+                if (bestHwCount >= 10) {
+                    const filtradas = [];
+                    for (let r = 0; r < linhas.length; r++) {
+                        if (r > bestHwRow && pareceHardware(linhas[r][0])) {
+                            const dirPreenchida = linhas[r].slice(Math.floor(bestHwCount / 2)).some(c => !vazia(c));
+                            if (!dirPreenchida) break;
+                        }
+                        filtradas.push(linhas[r]);
+                    }
+                    linhas = filtradas;
+                }
+                const maxC = Math.max(...linhas.map(r => r.length));
+                const trans = [];
+                for (let c = 0; c < maxC; c++) {
+                    trans.push(linhas.map(r => r[c] !== undefined ? r[c] : ''));
+                }
+                linhas = trans.filter(r => r.some(c => !vazia(c)));
+                nCols = Math.max(...linhas.map(r => r.length));
+            }
+        }
+
+        const cel = (r, c) => {
+            const v = linhas[r] ? linhas[r][c] : '';
+            if (vazia(v)) return '';
+            return typeof v === 'string' ? v.replace(/\s+/g, ' ').trim() : v;
+        };
+
+        const ehLinhaRes = (r) => {
+            const cs = linhas[r].filter(c => !vazia(c));
+            if (cs.length < 2) return false;
+            return cs.filter(c => typeof c === 'string' && famRes(c)).length / cs.length >= 0.4;
+        };
+
+        let hwCol = 0;
+        let achouPorNomeHw = false;
+        for (let cand = 0; cand < Math.min(4, nCols); cand++) {
+            const qtdHw = linhas.filter(r => pareceHardware(r[cand])).length;
+            if (qtdHw >= 2) { hwCol = cand; achouPorNomeHw = true; break; }
+        }
+
+        let iDados = -1;
+        for (let r = 0; r < Math.min(linhas.length, 10); r++) {
+            const row = linhas[r];
+            if (ehLinhaRes(r)) continue;
+            const valHw = row[hwCol];
+            if (vazia(valHw) || ehNum(valHw) || ehDataCelula(valHw)) continue;
+            if (famRes(valHw) || pareceSubmetrica(valHw)) continue;
+            if (/^(processador|hardware|placa|placa de video|gpu|cpu|modelo|item|nome|serie)$/.test(norm(valHw))) continue;
+            const qtdNums = row.slice(hwCol + 1).filter(c => !vazia(c) && ehNum(c) && !ehDataCelula(c)).length;
+            if (qtdNums >= 2) { iDados = r; break; }
+        }
+        if (iDados < 1) return null;
+
+        const dadosLin = [];
+        for (let r = iDados; r < linhas.length; r++) {
+            const row = linhas[r];
+            if (ehLinhaRes(r)) break;
+            const textos = row.filter(c => !vazia(c) && !ehNum(c) && !ehDataCelula(c)).length;
+            const nums = row.filter(c => !vazia(c) && ehNum(c) && !ehDataCelula(c)).length;
+            if (nums === 0 && textos >= 3) break;
+            if (nums === 0) continue;
+            dadosLin.push(row);
+        }
+        if (!dadosLin.length) return null;
+
+        const contagem = (c) => {
+            let t = 0, n = 0;
+            dadosLin.forEach(r => {
+                if (vazia(r[c]) || ehDataCelula(r[c])) return;
+                if (ehNum(r[c])) n++; else t++;
+            });
+            return { t, n };
+        };
+
+        if (!achouPorNomeHw) {
+            for (let c = 0; c < nCols; c++) {
+                const { t, n } = contagem(c);
+                if (t >= 2 && t >= n * 1.5) { hwCol = c; break; }
+            }
+        }
+
+        const nomesHw = new Set();
+        dadosLin.forEach(r => { if (!vazia(r[hwCol]) && !ehNum(r[hwCol])) nomesHw.add(norm(r[hwCol])); });
+
+        const nameCols = [];
+        for (let c = hwCol + 1; c < nCols; c++) {
+            const { t, n } = contagem(c);
+            if (t >= 3 && t >= n * 1.5) {
+                const textos = dadosLin.map(r => r[c]).filter(v => !vazia(v) && !ehNum(v));
+                if (textos.length && textos.filter(v => nomesHw.has(norm(v)) || pareceHardware(v)).length / textos.length >= 0.4) {
+                    nameCols.push(c);
+                }
+            }
+        }
+
+        const donos = [hwCol, ...nameCols].sort((a, b) => a - b);
+        const donoDe = (c) => { let d = hwCol; donos.forEach(x => { if (x <= c) d = x; }); return d; };
+        const linhaPorNome = {};
+        const linhaPorToken = {};
+        donos.forEach(d => {
+            const m = new Map(), mt = new Map();
+            dadosLin.forEach(r => {
+                if (!vazia(r[d]) && !ehNum(r[d])) {
+                    const k = norm(r[d]);
+                    if (!m.has(k)) m.set(k, r);
+                    const tk = [...tokens(r[d])].sort().join(' ');
+                    if (tk && !mt.has(tk)) mt.set(tk, r);
+                }
+            });
+            linhaPorNome[d] = m;
+            linhaPorToken[d] = mt;
+        });
+
+        const hRows = [];
+        for (let r = 0; r < iDados; r++) hRows.push(r);
+
+        let resAba = elResPadrao.value ? famRes(elResPadrao.value) : resEmTexto(nomeAbaAtual);
+
+        const cur = new Array(iDados).fill('');
+        const infos = [];
+
+        for (let c = hwCol + 1; c < nCols; c++) {
+            if (nameCols.includes(c)) continue;
+            const temHeader = hRows.some(r => !vazia(linhas[r][c]));
+            const { t, n } = contagem(c);
+            if (!temHeader && n === 0 && t === 0) continue;
+
+            for (let r = 0; r < iDados; r++) {
+                const val = cel(r, c);
+                if (val !== '') {
+                    cur[r] = String(val);
+                    for (let k = r + 1; k < iDados; k++) {
+                        if (cel(k, c) === '') cur[k] = '';
+                    }
+                }
+            }
+
+            const partes = cur.map(x => String(x).trim()).filter(Boolean);
+            const partesUnicas = partes.filter((p, idx) => idx === 0 || norm(p) !== norm(partes[idx - 1]));
+
+            let idxRes = -1;
+            let rp = null;
+            for (let i = 0; i < partesUnicas.length; i++) {
+                const rMatch = famRes(partesUnicas[i]);
+                if (rMatch) { idxRes = i; rp = rMatch; break; }
+            }
+
+            let jogo = '';
+            let subRotulo = '';
+            let preset = '';
+            let ordem = 0;
+            let resKey = '';
+
+            if (rp) {
+                const antes = partesUnicas.slice(0, idxRes);
+                const depois = partesUnicas.slice(idxRes + 1);
+                jogo = antes.length ? antes[0] : (depois.length ? depois[0] : rp.rotulo);
+                if (antes.length > 1) preset = antes.slice(1).join(' › ');
+                const subMetric = antes.length ? depois.join(' › ') : depois.slice(1).join(' › ');
+
+                resKey = rp.chave + (subMetric ? '-' + norm(subMetric) : '');
+                subRotulo = rp.rotulo + (subMetric ? ' · ' + subMetric : '');
+
+                let pesoSub = 0;
+                if (subMetric) {
+                    const sm = norm(subMetric);
+                    if (/^(med|media|fps med\.?)$/.test(sm)) pesoSub = 0.01;
+                    else if (/^(min|minimo)$/.test(sm)) pesoSub = 0.2;
+                    else if (/^(0[.,]01|1% ?low|media 1%)$/.test(sm)) pesoSub = 0.3;
+                    else if (/^(max|maximo)$/.test(sm)) pesoSub = 0.4;
+                    else pesoSub = 0.15;
+                }
+                ordem = rp.ordem + pesoSub;
+            } else if (partesUnicas.length >= 2) {
+                jogo = partesUnicas[0];
+                subRotulo = partesUnicas.slice(1).join(' › ');
+                resKey = norm(subRotulo);
+                ordem = infos.filter(x => x.jogo === jogo).length + 1;
+            } else {
+                jogo = partesUnicas[0] || ('Coluna ' + letraColuna(c));
+                if (resAba && !ehColunaDePrecoBruto(jogo)) {
+                    rp = resAba;
+                    resKey = rp.chave;
+                    subRotulo = rp.rotulo;
+                    ordem = rp.ordem;
+                }
+            }
+
+            const headerSimples = partesUnicas.join(' › ') || ('Coluna ' + letraColuna(c));
+            const ehLink = /^link\b/i.test(headerSimples);
+            const ehPrecoBruto = ehColunaDePrecoBruto(headerSimples);
+            const ehTeste = n >= 1 && n >= t && !ehLink && !ehPrecoBruto;
+
+            infos.push({
+                c, jogo, rp, resKey, subRotulo, ordem, preset,
+                ehTeste, ehPrecoBruto, n,
+                owner: donoDe(c),
+                headerSimples
+            });
+        }
+
+        const usados = new Set();
+        const unico = (base) => { let n = base, i = 2; while (usados.has(n)) n = base + ' (' + (i++) + ')'; usados.add(n); return n; };
+
+        let hdrHw = 'Hardware';
+        for (const r of hRows) {
+            if (!vazia(linhas[r][hwCol]) && !ehLinhaRes(r)) {
+                hdrHw = String(linhas[r][hwCol]).trim();
+                break;
+            }
+        }
+        unico(hdrHw);
+
+        const colunas = [hdrHw];
+        const meta = {};
+        infos.forEach(inf => {
+            let baseNome = inf.ehTeste
+                ? (inf.subRotulo ? `${inf.jogo} · ${inf.subRotulo}` : inf.jogo)
+                : inf.headerSimples;
+            const nome = unico(baseNome);
+            inf.nome = nome;
+            colunas.push(nome);
+        });
+
+        const dados = [];
+        const jaTem = new Set();
+        const adicionarHardwarePorNome = (nomeBruto, rowBase, donoBase) => {
+            if (vazia(nomeBruto) || ehNum(nomeBruto) || ehDataCelula(nomeBruto)) return;
+            const k = norm(nomeBruto);
+            if (jaTem.has(k)) return;
+            jaTem.add(k);
+            const tkKey = [...tokens(nomeBruto)].sort().join(' ');
+            const obj = {};
+            obj[hdrHw] = String(nomeBruto).trim();
+            infos.forEach(inf => {
+                let v = '';
+                if (inf.owner === donoBase && rowBase) {
+                    v = rowBase[inf.c];
+                } else {
+                    const rr = linhaPorNome[inf.owner].get(k) || (tkKey ? linhaPorToken[inf.owner].get(tkKey) : null);
+                    v = rr ? rr[inf.c] : '';
+                }
+                obj[inf.nome] = vazia(v) ? '' : v;
+            });
+            dados.push(obj);
+        };
+
+        dadosLin.forEach(row => adicionarHardwarePorNome(row[hwCol], row, hwCol));
+        nameCols.forEach(nc => {
+            dadosLin.forEach(row => adicionarHardwarePorNome(row[nc], row, nc));
+        });
+
+        infos.forEach(inf => {
+            if (!inf.ehTeste) return;
+            const nValidos = dados.filter(l => !vazia(l[inf.nome]) && limparNumero(l[inf.nome]) > 0).length;
+            if (nValidos === 0) return;
+            meta[inf.nome] = {
+                jogo: inf.jogo,
+                resKey: inf.resKey || '',
+                resRotulo: inf.subRotulo || '',
+                temResReal: !!inf.rp,
+                ehMediaCol: /\b(med|media)\b/.test(norm(inf.subRotulo)),
+                ordem: inf.ordem || 0,
+                preset: inf.preset || '',
+                n: nValidos
+            };
+        });
+
+        if (Object.keys(meta).length === 0 || dados.length === 0) return null;
+        return { colunas, dados, meta };
+    }
+
+    function linkificar(t) {
+        const aspas = function (s) { return String(s).replace(/"/g, '&quot;'); };
+        return String(t || '')
+            .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/gi, function (m, txt, url) {
+                return '<a href="' + aspas(url) + '" target="_blank" rel="noopener noreferrer">' + txt + '</a>';
+            })
+            .replace(/(^|[\s(])(https?:\/\/[^\s<>"')]+)/gi, function (m, pre, url) {
+                let nome = url;
+                try { const u = new URL(url); nome = u.hostname.replace(/^www\./, '') + ((u.pathname.length > 1 || u.search) ? '/…' : ''); } catch (e) {}
+                return pre + '<a href="' + aspas(url) + '" target="_blank" rel="noopener noreferrer">' + nome + ' ↗</a>';
+            });
+    }
+    elPreviewFonte.innerHTML = linkificar(fonteTextoBruto);
+
+    const CSS_RESP = '.fl-h-row{grid-template-columns:clamp(96px,26%,170px) 1fr;gap:10px}.fl-h-track{background-color:#f9fafb;background-image:linear-gradient(to right,#e2e5ea 1px,transparent 1px);background-size:50% 100%;border-right:1px solid #e2e5ea;position:relative}.fl-h-axis{margin-top:-4px}.fl-h-ticks{display:flex;justify-content:space-between;font-size:.72rem;color:#6b7280}@media (max-width:640px){.fl-chart-h{gap:10px}.fl-h-row{grid-template-columns:1fr!important;gap:3px}.fl-h-label{text-align:left!important;font-size:.8rem}.fl-h-label span{max-width:100%}.fl-h-track{height:34px!important}.fl-h-bar{font-size:.95rem!important;min-width:36px!important}.fl-h-axis-empty{display:none}.fl-chart-v{height:320px!important;padding-left:34px!important;gap:6px!important}.fl-legend{gap:5px}.fl-lg{font-size:.7rem;padding:3px 7px}}';
+    const CSS_ANIM = '@keyframes flGrowV{from{height:0;min-height:0}}@keyframes flGrowH{from{width:0;min-width:0}}@keyframes flFadeIn{from{opacity:0}}@keyframes flPill{from{opacity:0;transform:translateX(-50%) translateY(6px)}}@keyframes flRise{from{opacity:0;transform:translateY(8px)}}.fl-v-bar{animation:flGrowV .55s cubic-bezier(.22,.8,.3,1) both;animation-delay:calc(var(--i,0)*45ms);transition:filter .15s}.fl-h-bar{animation:flGrowH .6s cubic-bezier(.22,.8,.3,1) both;animation-delay:calc(var(--i,0)*45ms);transition:filter .15s}.fl-v-bar:hover,.fl-h-bar:hover{filter:brightness(1.1)}.fl-pill{animation:flPill .35s ease-out both;animation-delay:calc(var(--i,0)*45ms + 380ms)}.fl-h-label{animation:flFadeIn .4s ease-out both;animation-delay:calc(var(--i,0)*45ms)}.fl-lg{animation:flFadeIn .4s ease-out both}.flourish-card{animation:flRise .5s ease-out both}.fl-footer a{color:#1d4ed8;text-decoration:underline;word-break:break-all}.fl-footer a:hover{color:#e42824}';
+    const CSS_NOVOS = '.fl-pills{display:inline-flex;flex-wrap:wrap;gap:3px;background:#f3f4f6;padding:3px;border-radius:6px;border:1px solid #e5e7eb}.fl-pill-btn{border:none;background:transparent;color:#4b5563;font-family:inherit;font-size:.8rem;font-weight:600;padding:5px 10px;border-radius:4px;cursor:pointer;transition:background .15s,color .15s,box-shadow .15s;white-space:nowrap}.fl-pill-btn:hover{color:#111827}.fl-pill-btn.active{background:#ffffff;color:#111827;box-shadow:0 1px 3px rgba(0,0,0,.1)}.fl-val-rel{font-size:.66em;font-weight:600;opacity:.88;letter-spacing:-.2px}.fl-ref-v{position:absolute;left:0;right:0;border-top:2px dashed #111827;z-index:4;pointer-events:none}.fl-ref-tag-v{position:absolute;right:0;bottom:4px;background:#111827;color:#ffffff;font-size:.7rem;font-weight:700;padding:2px 7px;border-radius:4px;white-space:nowrap}.fl-chart-h.has-ref{padding-top:26px}.fl-ref-h{position:absolute;top:-7px;bottom:-7px;border-left:2px dashed #111827;z-index:3;pointer-events:none}.fl-ref-h.first{top:0}.fl-ref-h.last{bottom:0}.fl-ref-tag-h{position:absolute;top:-22px;left:0;transform:translateX(-50%);background:#111827;color:#ffffff;font-size:.7rem;font-weight:700;padding:2px 7px;border-radius:4px;white-space:nowrap}';
+    const CSS_EXTRA = CSS_RESP + CSS_ANIM + CSS_NOVOS + '.fl-tooltip{position:fixed;z-index:9999;pointer-events:none;background:rgba(17,24,39,.92);color:#fff;padding:10px 12px;border-radius:8px;font-size:.8rem;line-height:1.5;max-width:290px;box-shadow:0 8px 24px rgba(0,0,0,.3);opacity:0;transition:opacity .12s;backdrop-filter:blur(3px)}.fl-tooltip.show{opacity:1}.fl-tooltip hr{border:0;border-top:1px solid rgba(255,255,255,.2);margin:6px 0}.fl-tooltip .mut{color:#cbd5e1}.fl-pill{position:absolute;left:50%;transform:translateX(-50%);width:100%;max-width:120px;box-sizing:border-box;padding:3px 3px;border-radius:4px;font-size:clamp(7.5px,calc(100cqw / (var(--n,8) * 6.2)),12px);font-weight:700;line-height:1.15;text-align:center;z-index:3;white-space:normal;word-break:break-word;overflow:visible}.fl-v-label{position:absolute;top:calc(100% + 6px);left:50%;transform:translateX(-50%);width:100%;max-width:120px;box-sizing:border-box;padding:0 2px;font-size:clamp(7.5px,calc(100cqw / (var(--n,8) * 6.2)),12px);font-weight:600;line-height:1.18;color:#222;text-align:center;white-space:normal;word-break:break-word;overflow:visible}.fl-legend{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}.fl-lg{padding:4px 10px;border-radius:5px;font-size:.78rem;font-weight:700}.fl-gen-bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 12px;font-size:.76rem;color:#4b5563;font-weight:600}.fl-gen-item{display:inline-flex;align-items:center;gap:5px;background:#f3f4f6;border:1px solid #e5e7eb;padding:2px 8px;border-radius:4px}.fl-gen-dot{width:9px;height:9px;border-radius:2px;display:inline-block}.fl-chart-v{height:390px;margin-top:16px;padding-bottom:52px;container-type:inline-size}.fl-y-grid{bottom:52px}.fl-v-col{min-width:0}[data-i]{cursor:pointer}';
+
+    function construirItens(o) {
+        const num = v => { if (typeof v === 'number') return v; if (v === null || v === undefined) return NaN; let s = String(v).trim().replace(/[^\d.,-]/g, ''); if (!s) return NaN; if (s.includes(',') && s.includes('.')) s = s.lastIndexOf(',') > s.lastIndexOf('.') ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, ''); else if (s.includes(',')) s = s.replace(',', '.'); return parseFloat(s); };
+        const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+        const brl = n => 'R$ ' + n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const m = o.meta ? o.meta[o.teste] : null;
+        const itens = [];
+        o.idxs.forEach((idx, pos) => {
+            const l = o.dados[idx]; if (!l) return;
+            const nome = String(l[o.colHw] || `Linha ${idx + 1}`), perf = num(l[o.teste]), preco = o.colPreco ? num(l[o.colPreco]) : NaN;
+            if (!isFinite(perf) || perf <= 0) return;
+            if (o.metrica !== 'bruto' && (!isFinite(preco) || preco <= 0)) return;
+            let val = perf, txt = Number.isInteger(perf) ? String(perf) : perf.toFixed(1);
+            if (o.modoPreco) txt = Math.round(perf).toLocaleString('pt-BR');
+            else if (o.metrica === 'custo_ponto') { val = preco / perf; txt = val.toFixed(1); }
+            if (!isFinite(val)) return;
+            const cor = o.corFn(nome, pos, l);
+            itens.push({ idx, nome, cor, val, txt, perf, preco, relTxt: '' });
+        });
+
+        const menorMelhor = o.metrica === 'custo_ponto' || !!o.modoPreco;
+        itens.sort((a, b) => menorMelhor ? a.val - b.val : b.val - a.val);
+
+        itens.forEach((it, i) => { it.rank = i + 1; });
+        const lider = itens[0];
+
+        // Comparação relativa (%) contra a placa em destaque
+        let refVal = NaN;
+        if (o.compRelativa && o.principalNome) {
+            const itRef = itens.find(x => String(x.nome) === String(o.principalNome));
+            if (itRef && isFinite(itRef.val) && itRef.val > 0) {
+                refVal = itRef.val;
+            } else {
+                const lRef = o.dados.find(l => l && String(l[o.colHw]) === String(o.principalNome));
+                if (lRef) {
+                    const pRef = num(lRef[o.teste]), prRef = o.colPreco ? num(lRef[o.colPreco]) : NaN;
+                    if (isFinite(pRef) && pRef > 0) {
+                        if (o.metrica === 'bruto' || o.modoPreco) refVal = pRef;
+                        else if (isFinite(prRef) && prRef > 0) refVal = prRef / pRef;
+                    }
+                }
+            }
+        }
+
+        itens.forEach((it) => {
+            if (isFinite(refVal) && refVal > 0) {
+                if (String(it.nome) === String(o.principalNome)) {
+                    it.relTxt = 'base';
+                } else {
+                    const pct = Math.round(((it.val / refVal) - 1) * 100);
+                    it.relTxt = (pct > 0 ? '+' : '') + pct + '%';
+                }
+            }
+            const catBadge = (it.cor && it.cor.cat && it.cor.cat !== 'Outros')
+                ? ' <span style="font-size:.72rem;padding:1px 6px;border-radius:3px;background:rgba(255,255,255,.15);color:#e2e8f0;font-weight:600">' + esc(it.cor.cat) + '</span>'
+                : '';
+            let h = '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:.9rem"><span style="width:10px;height:10px;border-radius:50%;background:' + it.cor.bg + '"></span><b>' + esc(it.nome) + '</b>' + catBadge + '</div><hr>';
+            if (m) h += '<div class="mut">' + esc(m.jogo + (m.resRotulo ? ' · ' + m.resRotulo : '')) + '</div>';
+            if (o.modoPreco) h += '<div>Preço médio: <b>' + brl(it.perf) + '</b></div>' + ['Menor preço', 'Maior preço', 'Último preço'].map(k => num(o.dados[it.idx][k]) > 0 ? '<div>' + k + ': <b>' + brl(num(o.dados[it.idx][k])) + '</b></div>' : '').join('');
+            else h += '<div>Desempenho: <b>' + (Number.isInteger(it.perf) ? it.perf : it.perf.toFixed(1)) + ' FPS/pts</b></div>';
+            if (isFinite(it.preco) && it.preco > 0) h += '<div>Preço: <b>' + brl(it.preco) + '</b></div><div>Custo por FPS: <b>' + brl(it.preco / it.perf) + '</b></div>';
+            if (it.relTxt && it.relTxt !== 'base' && o.principalNome) {
+                h += '<div>vs. ' + esc(o.principalNome) + ': <b>' + it.relTxt + '</b></div>';
+            }
+            h += '<div class="mut">Posição #' + it.rank + ' de ' + itens.length + (it.rank > 1 ? (menorMelhor ? ' · ' + Math.round((it.val / lider.val - 1) * 100) + '% mais caro que o líder' : ' · ' + Math.round(it.val / lider.val * 100) + '% do líder') : ' · 🏆 líder') + '</div>';
+            it.tip = h;
+        });
+
+        const ord = o.ordem || 'valor_desc';
+        if (ord === 'valor_asc') itens.reverse();
+        else if (ord === 'az' || ord === 'za') itens.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { numeric: true, sensitivity: 'base' }) * (ord === 'za' ? -1 : 1));
+        return itens;
+    }
+
+    function renderizarGrafico(c, itens, cfg) {
+        c.innerHTML = '';
+        if (!itens.length) { c.innerHTML = '<div style="padding:80px 20px;text-align:center;color:#6b7280">' + (cfg.vazio || 'Sem dados') + '</div>'; return; }
+        let tip = document.getElementById('flTooltip');
+        if (!tip) { tip = document.createElement('div'); tip.id = 'flTooltip'; tip.className = 'fl-tooltip'; document.body.appendChild(tip); }
+        const esc = t => String(t).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+        const duasLinhas = t => {
+            const s = String(t || '').trim().replace(/\s+/g, ' ');
+            const partes = s.split(' ');
+            if (partes.length <= 1) return esc(s);
+            const meio = s.length / 2;
+            let melhorIdx = 1, menorDist = Infinity, acum = 0;
+            for (let i = 0; i < partes.length - 1; i++) {
+                acum += partes[i].length + (i > 0 ? 1 : 0);
+                const dist = Math.abs(acum - meio);
+                if (dist < menorDist) { menorDist = dist; melhorIdx = i + 1; }
+            }
+            return esc(partes.slice(0, melhorIdx).join(' ')) + '<br>' + esc(partes.slice(melhorIdx).join(' '));
+        };
+
+        if (cfg.esquemaCor === 'geracoes') {
+            const categoriasVistas = new Map();
+            let itemPrincipal = null;
+            itens.forEach(it => {
+                if (it.cor && it.cor.principal) { if (!itemPrincipal) itemPrincipal = it; return; }
+                if (it.cor && it.cor.cat && !categoriasVistas.has(it.cor.cat)) {
+                    categoriasVistas.set(it.cor.cat, it.cor.bg);
+                }
+            });
+            if (itemPrincipal) categoriasVistas.set('★ ' + itemPrincipal.nome, itemPrincipal.cor.bg);
+            if (categoriasVistas.size > 0) {
+                const genBar = document.createElement('div');
+                genBar.className = 'fl-gen-bar';
+                genBar.innerHTML = Array.from(categoriasVistas.entries()).map(([cat, bg]) =>
+                    `<span class="fl-gen-item"><span class="fl-gen-dot" style="background:${bg}"></span>${esc(cat)}</span>`
+                ).join('');
+                c.appendChild(genBar);
+            }
+        }
+
+        // Cálculo da linha de referência (Target Line)
+        let refVal = NaN, refLabel = '';
+        const lr = cfg.linhaRef;
+        if (lr && lr.modo && lr.modo !== 'nenhuma') {
+            if (lr.modo === 'media') {
+                refVal = itens.reduce((s, it) => s + it.val, 0) / itens.length;
+                refLabel = 'Média: ' + (refVal >= 20 ? Math.round(refVal) : refVal.toFixed(1));
+            } else if (lr.modo === 'destaque') {
+                const itP = itens.find(it => it.cor && it.cor.principal);
+                if (itP) { refVal = itP.val; refLabel = itP.nome + ': ' + itP.txt; }
+            } else if (lr.modo === 'fixo' && isFinite(lr.valor) && lr.valor > 0) {
+                refVal = lr.valor;
+                refLabel = lr.rotulo ? lr.rotulo : String(lr.valor);
+            }
+        }
+        const temRef = isFinite(refVal) && refVal > 0;
+
+        const maxVal = Math.max.apply(null, itens.map(i => i.val).concat(temRef ? [refVal] : []));
+        const teto = maxVal * 1.22;
+        const pos = cfg.pos || 'rotulo';
+        if (pos === 'legenda') {
+            const lg = document.createElement('div'); lg.className = 'fl-legend';
+            lg.innerHTML = itens.map((it, i) => '<span class="fl-lg" data-i="' + i + '" style="background:' + it.cor.bg + ';color:' + it.cor.txt + '">' + esc(it.nome) + '</span>').join('');
+            c.appendChild(lg);
+        }
+        if (cfg.orient === 'v') {
+            const ch = document.createElement('div'); ch.className = 'fl-chart-v'; ch.style.setProperty('--n', itens.length);
+            const g = document.createElement('div'); g.className = 'fl-y-grid';
+            [0, 0.5, 1].forEach(p => { const ln = document.createElement('div'); ln.className = 'fl-grid-line'; ln.style.bottom = (p * 100) + '%'; ln.innerHTML = '<span class="fl-grid-label">' + Math.round(teto * p) + '</span>'; g.appendChild(ln); });
+            if (temRef) {
+                const rf = document.createElement('div');
+                rf.className = 'fl-ref-v';
+                rf.style.bottom = (refVal / teto * 100) + '%';
+                rf.innerHTML = '<span class="fl-ref-tag-v">' + esc(refLabel) + '</span>';
+                g.appendChild(rf);
+            }
+            ch.appendChild(g);
+            itens.forEach((it, i) => {
+                const col = document.createElement('div'); col.className = 'fl-v-col';
+                const h = Math.max(it.val / teto * 100, 8);
+                const nome2Linhas = duasLinhas(it.nome);
+                const conteudoBarra = '<span>' + it.txt + '</span>' + (it.relTxt ? '<span class="fl-val-rel">' + it.relTxt + '</span>' : '');
+                col.innerHTML = '<div class="fl-v-bar" data-i="' + i + '" style="height:' + h + '%;background:' + it.cor.bg + ';color:' + it.cor.txt + '">' + conteudoBarra + '</div>' +
+                    (pos === 'rotulo' ? '<div class="fl-pill" data-i="' + i + '" style="bottom:calc(' + h + '% + 6px);background:' + it.cor.bg + ';color:' + it.cor.txt + '">' + nome2Linhas + '</div>' : '') +
+                    (pos === 'abaixo' ? '<div class="fl-v-label" data-i="' + i + '">' + nome2Linhas + '</div>' : '');
+                ch.appendChild(col);
+            });
+            c.appendChild(ch);
+        } else {
+            const ch = document.createElement('div'); ch.className = 'fl-chart-h' + (temRef ? ' has-ref' : '');
+            const pctRef = temRef ? (refVal / teto * 100) : 0;
+            itens.forEach((it, i) => {
+                const row = document.createElement('div'); row.className = 'fl-h-row';
+                if (pos === 'legenda') row.style.gridTemplateColumns = '1fr';
+                const w = Math.max(it.val / teto * 100, 8);
+                const lab = pos === 'legenda' ? '' : (pos === 'rotulo'
+                    ? '<div class="fl-h-label"><span data-i="' + i + '" style="display:inline-block;padding:3px 8px;border-radius:5px;background:' + it.cor.bg + ';color:' + it.cor.txt + '">' + esc(it.nome) + '</span></div>'
+                    : '<div class="fl-h-label" data-i="' + i + '">' + esc(it.nome) + '</div>');
+                const conteudoBarra = '<span>' + it.txt + '</span>' + (it.relTxt ? '<span class="fl-val-rel">(' + it.relTxt + ')</span>' : '');
+                const segRef = temRef
+                    ? '<div class="fl-ref-h' + (i === 0 ? ' first' : '') + (i === itens.length - 1 ? ' last' : '') + '" style="left:' + pctRef + '%">' + (i === 0 ? '<span class="fl-ref-tag-h">' + esc(refLabel) + '</span>' : '') + '</div>'
+                    : '';
+                row.innerHTML = lab + '<div class="fl-h-track"><div class="fl-h-bar" data-i="' + i + '" style="width:' + w + '%;background:' + it.cor.bg + ';color:' + it.cor.txt + '">' + conteudoBarra + '</div>' + segRef + '</div>';
+                ch.appendChild(row);
+            });
+            const fmtT = v => v >= 20 ? String(Math.round(v)) : v.toFixed(1);
+            const ax = document.createElement('div'); ax.className = 'fl-h-row fl-h-axis';
+            if (pos === 'legenda') ax.style.gridTemplateColumns = '1fr';
+            ax.innerHTML = (pos === 'legenda' ? '' : '<div class="fl-h-axis-empty"></div>') + '<div class="fl-h-ticks"><span>0</span><span>' + fmtT(teto / 2) + '</span><span>' + fmtT(teto) + '</span></div>';
+            ch.appendChild(ax);
+            c.appendChild(ch);
+        }
+        c.querySelectorAll('.fl-v-col,.fl-h-row').forEach(function (el, k) { el.style.setProperty('--i', k); });
+        const mostrar = (e) => {
+            const t = e.target.closest ? e.target.closest('[data-i]') : null;
+            if (!t) { tip.classList.remove('show'); return; }
+            tip.innerHTML = itens[+t.getAttribute('data-i')].tip;
+            const x = Math.min(e.clientX + 16, window.innerWidth - tip.offsetWidth - 8), y = Math.min(e.clientY + 16, window.innerHeight - tip.offsetHeight - 8);
+            tip.style.left = Math.max(x, 4) + 'px'; tip.style.top = Math.max(y, 4) + 'px';
+            tip.classList.add('show');
+        };
+        c.onmousemove = mostrar;
+        c.onclick = mostrar;
+        c.onmouseleave = () => tip.classList.remove('show');
+        if (!window._flTipOutside) {
+            window._flTipOutside = true;
+            document.addEventListener('click', function (e) {
+                if (!e.target.closest || !e.target.closest('[data-i]')) { const t2 = document.getElementById('flTooltip'); if (t2) t2.classList.remove('show'); }
+            });
+        }
+    }
+
+    (function () { const st = document.createElement('style'); st.textContent = CSS_EXTRA; document.head.appendChild(st); })();
+
+    function maxPlacas() { return parseInt(elMaxPlacas.value, 10) || 6; }
+    function motivoIndisponibilidade(idx) {
+        const linha = dadosAtuais[idx];
+        if (!linha || !temDadoNoTeste(linha, elTeste.value)) return 'sem dado neste teste';
+        if (elMetrica.value !== 'bruto') {
+            const preco = elColPreco.value ? limparNumero(linha[elColPreco.value]) : NaN;
+            if (!(preco > 0)) return 'sem preço na base';
+        }
+        return '';
+    }
+    function validoNoGrafico(idx) {
+        return !motivoIndisponibilidade(idx);
+    }
+    function alternarSelecao(idx) {
+        selecaoAlteradaManualmente = true;
+        if (indicesSelecionados.has(idx)) {
+            indicesSelecionados.delete(idx);
+        } else {
+            indicesSelecionados.add(idx);
+            const motivo = motivoIndisponibilidade(idx);
+            if (motivo) {
+                mostrarStatus(`Item selecionado (${motivo} neste teste).`, 'info');
+            }
+        }
+        salvarSelecaoUsuario();
+    }
+
+    elMaxPlacas.addEventListener('change', () => {
+        if (!dadosAtuais.length) return;
+        selecaoAlteradaManualmente = false;
+        nomesSelecionadosUsuario = [];
+        selecionarPadrao();
+        atualizarTudo();
+    });
+    elPosNomes.addEventListener('change', () => { if (dadosAtuais.length) atualizarTudo(); });
+    elOrdem.addEventListener('change', () => { if (dadosAtuais.length) atualizarTudo(); });
+    ['selectColPreco', 'selectPrecoNome', 'selectPrecoValor'].forEach(id => {
+        const el = document.getElementById(id), g = el && el.closest('.control-group'); if (g) g.style.display = 'none';
+    });
+    if (MODO_SO_DESEMPENHO) {
+        ['selectColPreco', 'selectMetrica', 'selectPrecoNome', 'selectPrecoValor', 'selectModoPreco'].forEach(id => {
+            const el = document.getElementById(id), g = el && el.closest('.control-group'); if (g) g.style.display = 'none';
+        });
+        document.querySelectorAll('.section-divider').forEach(d => { if (/Base de Preços/.test(d.textContent)) d.style.display = 'none'; });
+        statusPrecos.style.display = 'none';
+        elMetrica.value = 'bruto'; cardSelectMetrica.value = 'bruto'; cardSelectMetrica.style.display = 'none';
+    }
+
+    // ---------- Testes / Jogos habilitados ----------
+    function ehExcluidoPadrao(j) {
+        const t = norm(j);
+        if (/s\.?\s*t\.?\s*a\.?\s*l\.?\s*k\.?\s*e\.?\s*r/.test(t) && !/\bv\.?\s*2\b/.test(t)) return true;
+        if (/(counter\s*strike|\bcs\b).*(\bv\s*1\b)/i.test(t)) return true;
+        return false;
+    }
+
+    function ehJogoComRes(j) {
+        return Object.keys(testeMeta).some(k => testeMeta[k].jogo === j && testeMeta[k].temResReal);
+    }
+
+    function ehJogoPadrao(j) {
+        if (ehExcluidoPadrao(j)) return false;
+        if (/^m[eé]dia/i.test(j)) return false;
+        return ehJogoComRes(j);
+    }
+
+    function jogosPadrao() {
+        const todos = ordenarJogos();
+        const jogosFiltrados = todos.filter(ehJogoPadrao);
+        if (jogosFiltrados.length > 0) return new Set(jogosFiltrados);
+        const semExcluidos = todos.filter(j => !ehExcluidoPadrao(j) && !/^(preco por|custo por)/i.test(norm(j)));
+        return new Set(semExcluidos.length ? semExcluidos : todos);
+    }
+
+    function testeHab(k) {
+        const m = testeMeta && testeMeta[k];
+        return !!m && jogosHab.has(m.jogo) && (!m.resRotulo || !resDesab.has(m.resRotulo));
+    }
+    function jogosAtivos() {
+        return ordenarJogos().filter(j => jogosHab.has(j) && Object.keys(testeMeta).some(k => testeMeta[k].jogo === j && testeHab(k)));
+    }
+    function resolucoesLista() {
+        const mapa = new Map();
+        Object.keys(testeMeta || {}).forEach(k => {
+            const m = testeMeta[k];
+            if (!m.resRotulo || !jogosHab.has(m.jogo)) return;
+            if (!mapa.has(m.resRotulo) || m.ordem < mapa.get(m.resRotulo)) mapa.set(m.resRotulo, m.ordem);
+        });
+        return Array.from(mapa.entries()).sort((a, b) => a[1] - b[1]).map(x => x[0]);
+    }
+    function renderizarListaRes() {
+        const grp = document.getElementById('grpResHab'), box = document.getElementById('listaRes');
+        const lista = testeMeta ? resolucoesLista() : [];
+        grp.style.display = lista.length >= 2 ? 'flex' : 'none';
+        box.innerHTML = '';
+        lista.forEach(r => {
+            const lb = document.createElement('label');
+            lb.className = 'barra-item';
+            const cb = document.createElement('input');
+            cb.type = 'checkbox'; cb.checked = !resDesab.has(r);
+            cb.addEventListener('change', () => {
+                if (cb.checked) resDesab.delete(r);
+                else if (lista.filter(x => !resDesab.has(x)).length > 1) resDesab.add(r);
+                else cb.checked = true;
+                popularJogoRes(elTeste.value); atualizarTudo();
+            });
+            const sp = document.createElement('span');
+            sp.className = 'barra-nome'; sp.textContent = r;
+            lb.appendChild(cb); lb.appendChild(sp); box.appendChild(lb);
+        });
+    }
+    function renderizarListaJogos() {
+        const box = document.getElementById('listaJogos');
+        box.innerHTML = '';
+        ordenarJogos().forEach(j => {
+            const lb = document.createElement('label');
+            lb.style.cssText = 'display:flex;gap:6px;align-items:flex-start;font-size:0.76rem;cursor:pointer;margin:3px 0;';
+            const cb = document.createElement('input');
+            cb.type = 'checkbox'; cb.checked = jogosHab.has(j);
+            cb.addEventListener('change', () => {
+                if (cb.checked) jogosHab.add(j); else if (jogosHab.size > 1) jogosHab.delete(j); else cb.checked = true;
+                popularJogoRes(elTeste.value); atualizarTudo();
+            });
+            lb.appendChild(cb); lb.appendChild(document.createTextNode(j)); box.appendChild(lb);
+        });
+    }
+    document.getElementById('btnSoJogos').addEventListener('click', () => {
+        if (!testeMeta) return;
+        jogosHab = jogosPadrao();
+        renderizarListaJogos(); popularJogoRes(elTeste.value); atualizarTudo();
+    });
+    document.getElementById('btnTodosJogos').addEventListener('click', () => {
+        if (!testeMeta) return;
+        jogosHab = new Set(ordenarJogos()); renderizarListaJogos(); popularJogoRes(elTeste.value); atualizarTudo();
+    });
+
+    function temDadoNoTeste(linha, col) {
+        return !!linha && !vazia(linha[col]) && limparNumero(linha[col]) > 0;
+    }
+
+    function melhoresValidos(excluir, qtd) {
+        const col = elTeste.value;
+        return dadosAtuais.map((l, i) => ({ i, v: limparNumero(l[col]) })).filter(x => !excluir.has(x.i) && passaFaixaPreco(x.i) && validoNoGrafico(x.i)).sort((a, b) => b.v - a.v).slice(0, qtd).map(x => x.i);
+    }
+    function selecionarPadraoBase() {
+        if (testeMeta) {
+            indicesSelecionados = new Set(melhoresValidos(new Set(), maxPlacas()));
+            return;
+        }
+        indicesSelecionados = new Set(
+            dadosAtuais.map((_, idx) => idx)
+                .filter(passaFaixaPreco)
+                .slice(0, maxPlacas())
+                .filter(validoNoGrafico)
+        );
+    }
+
+    function selecionarPadrao() {
+        selecionarPadraoBase();
+        const idx = idxPrincipal();
+        if (idx < 0 || indicesSelecionados.has(idx)) return;
+        const lista = Array.from(indicesSelecionados);
+        if (lista.length >= maxPlacas()) lista.pop();
+        lista.push(idx);
+        indicesSelecionados = new Set(lista);
+    }
+
+    function ordenarJogos() {
+        const jogos = [];
+        Object.keys(testeMeta).forEach(k => { if (!jogos.includes(testeMeta[k].jogo)) jogos.push(testeMeta[k].jogo); });
+        const peso = (j) => /^m[eé]dia/i.test(j) ? 0 : (ehJogoComRes(j) ? 1 : 2);
+        return jogos.map((j, i) => ({ j, i })).sort((a, b) => peso(a.j) - peso(b.j) || a.i - b.i).map(x => x.j);
+    }
+
+    function melhorChave(chaves) {
+        return chaves.slice().sort((a, b) => {
+            const ma = testeMeta[a], mb = testeMeta[b];
+            if (ma.ehMediaCol !== mb.ehMediaCol) return ma.ehMediaCol ? -1 : 1;
+            return (mb.n - ma.n) || (ma.ordem - mb.ordem);
+        })[0];
+    }
+
+    function popularRes(jogo, resKeyPreferida, chaveForcada) {
+        const ks = Object.keys(testeMeta).filter(k => testeMeta[k].jogo === jogo && testeHab(k)).sort((a, b) => testeMeta[a].ordem - testeMeta[b].ordem);
+        elRes.innerHTML = '';
+        ks.forEach(k => {
+            const m = testeMeta[k];
+            const o = document.createElement('option');
+            o.value = k;
+            o.textContent = (m.resRotulo || 'Valor padrão') + ' (' + m.n + ')';
+            elRes.appendChild(o);
+        });
+        let esc = chaveForcada && ks.includes(chaveForcada) ? chaveForcada : null;
+        if (!esc && resKeyPreferida) {
+            esc = ks.find(k => testeMeta[k].resKey === resKeyPreferida && testeMeta[k].n > 0) || null;
+            if (!esc) {
+                const baseRes = resKeyPreferida.split('-')[0];
+                esc = ks.find(k => testeMeta[k].resKey.startsWith(baseRes) && testeMeta[k].ehMediaCol && testeMeta[k].n > 0)
+                    || ks.find(k => testeMeta[k].resKey.startsWith(baseRes) && testeMeta[k].n > 0) || null;
+            }
+        }
+        if (!esc) esc = melhorChave(ks);
+        elRes.value = esc;
+        return esc;
+    }
+
+    function copiarSelect(origem, destino) {
+        destino.innerHTML = origem.innerHTML;
+        destino.value = origem.value;
+    }
+
+    function renderizarPillsControles() {
+        const usarPills = elUsarPills.checked;
+        const temSub = !!testeMeta && elRes.options.length > 1;
+
+        // Resolução
+        if (usarPills && temSub) {
+            cardSelectRes.style.display = 'none';
+            cardPillsRes.style.display = 'inline-flex';
+            cardPillsRes.innerHTML = '';
+            Array.from(elRes.options).forEach(opt => {
+                const m = testeMeta[opt.value];
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'fl-pill-btn' + (opt.value === elRes.value ? ' active' : '');
+                b.textContent = (m && m.resRotulo) ? m.resRotulo.replace(/\s*\([^)]*\)/g, '') : opt.textContent;
+                b.title = opt.textContent;
+                b.addEventListener('click', () => {
+                    elRes.value = opt.value;
+                    mudouRes();
+                });
+                cardPillsRes.appendChild(b);
+            });
+        } else {
+            cardPillsRes.style.display = 'none';
+            cardSelectRes.style.display = temSub ? '' : 'none';
+        }
+
+        // Métrica
+        if (MODO_SO_DESEMPENHO) {
+            cardSelectMetrica.style.display = 'none';
+            cardPillsMetrica.style.display = 'none';
+        } else if (usarPills) {
+            cardSelectMetrica.style.display = 'none';
+            cardPillsMetrica.style.display = 'inline-flex';
+            cardPillsMetrica.innerHTML = '';
+            [
+                { v: 'bruto', t: 'Desempenho' },
+                { v: 'custo_ponto', t: 'Custo / FPS' }
+            ].forEach(op => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'fl-pill-btn' + (elMetrica.value === op.v ? ' active' : '');
+                b.textContent = op.t;
+                b.addEventListener('click', () => {
+                    elMetrica.value = op.v;
+                    cardSelectMetrica.value = op.v;
+                    atualizarDescricaoMetrica();
+                    atualizarTudo();
+                });
+                cardPillsMetrica.appendChild(b);
+            });
+        } else {
+            cardPillsMetrica.style.display = 'none';
+            cardSelectMetrica.style.display = '';
+        }
+
+        // Faixa de preço
+        if (!faixaVisivelNoCard()) {
+            cardSelectFaixa.style.display = 'none';
+            cardPillsFaixa.style.display = 'none';
+        } else if (usarPills) {
+            cardSelectFaixa.style.display = 'none';
+            cardPillsFaixa.style.display = 'inline-flex';
+            cardPillsFaixa.innerHTML = '';
+            faixasParaCard().forEach(f => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'fl-pill-btn' + (f.v === elFaixaPreco.value ? ' active' : '');
+                b.textContent = f.p;
+                b.title = f.t;
+                b.addEventListener('click', () => { elFaixaPreco.value = f.v; aplicarFaixaEscolhida(); });
+                cardPillsFaixa.appendChild(b);
+            });
+        } else {
+            cardPillsFaixa.style.display = 'none';
+            cardSelectFaixa.innerHTML = '';
+            faixasParaCard().forEach(f => {
+                const o = document.createElement('option');
+                o.value = f.v; o.textContent = f.t;
+                cardSelectFaixa.appendChild(o);
+            });
+            cardSelectFaixa.value = elFaixaPreco.value;
+            cardSelectFaixa.style.display = '';
+        }
+    }
+
+    function sincronizarCardJogoRes() {
+        copiarSelect(elJogo, cardSelectJogo);
+        copiarSelect(elRes, cardSelectRes);
+        renderizarPillsControles();
+    }
+
+    function aplicarTesteEscolhido() {
+        elTeste.value = elRes.value;
+        cardSelectTeste.value = elRes.value;
+        sincronizarCardJogoRes();
+    }
+
+    function sincronizarJogoRes() {
+        if (!testeMeta || !testeMeta[elTeste.value]) return;
+        const m = testeMeta[elTeste.value];
+        elJogo.value = m.jogo;
+        popularRes(m.jogo, null, elTeste.value);
+        sincronizarCardJogoRes();
+    }
+
+    function popularJogoRes(chaveAtiva) {
+        let jogos = jogosAtivos();
+        if (!jogos.length) { jogosHab = jogosPadrao(); resDesab = new Set(); jogos = jogosAtivos(); }
+        if (!testeMeta[chaveAtiva] || !testeHab(chaveAtiva)) {
+            const jogoAnt = testeMeta[chaveAtiva] ? testeMeta[chaveAtiva].jogo : null;
+            let alvo = Object.keys(testeMeta).filter(k => testeMeta[k].jogo === jogoAnt && testeHab(k));
+            if (!alvo.length) alvo = Object.keys(testeMeta).filter(k => testeMeta[k].jogo === jogos[0] && testeHab(k));
+            chaveAtiva = melhorChave(alvo);
+            elTeste.value = chaveAtiva; cardSelectTeste.value = chaveAtiva;
+        }
+        renderizarListaRes();
+        elJogo.innerHTML = '';
+        jogos.forEach(j => {
+            const o = document.createElement('option');
+            o.value = j;
+            o.textContent = j;
+            elJogo.appendChild(o);
+        });
+        const m = testeMeta[chaveAtiva];
+        elJogo.value = m.jogo;
+        popularRes(m.jogo, null, chaveAtiva);
+        aplicarTesteEscolhido();
+    }
+
+    function mudouJogo() {
+        const resAtual = testeMeta[elTeste.value] ? testeMeta[elTeste.value].resKey : '';
+        popularRes(elJogo.value, resAtual, null);
+        aplicarTesteEscolhido();
+        atualizarTudo();
+    }
+    function mudouRes() {
+        aplicarTesteEscolhido();
+        atualizarTudo();
+    }
+    elJogo.addEventListener('change', mudouJogo);
+    elRes.addEventListener('change', mudouRes);
+    cardSelectJogo.addEventListener('change', () => { elJogo.value = cardSelectJogo.value; mudouJogo(); });
+    cardSelectRes.addEventListener('change', () => { elRes.value = cardSelectRes.value; mudouRes(); });
+    elResPadrao.addEventListener('change', () => { if (matrizBrutaAba.length) estruturarDadosDaMatriz(); });
+
+    function obterTextoMetrica() {
+        return elMetrica.value === 'custo_ponto' ? 'Menor é melhor' : 'Maior é melhor';
+    }
+
+    function legendaDoTeste(qtdItens) {
+        const col = elTeste.value;
+        const m = testeMeta ? testeMeta[col] : null;
+        const guia = obterTextoMetrica();
+        if (!m) return `${col} — ${qtdItens} ${qtdItens === 1 ? 'item comparado' : 'itens comparados'} · ${guia}`;
+        let txt = m.jogo + (m.resRotulo ? ' · ' + m.resRotulo : '');
+        if (m.preset) txt += ' · ' + m.preset;
+        return txt + ' — ' + qtdItens + (qtdItens === 1 ? ' item comparado' : ' itens comparados') + ' · ' + guia;
+    }
+
+    function atualizarLegendaTeste(itens) {
+        const cap = document.getElementById('previewCaption');
+        const info = document.getElementById('infoTeste');
+        const m = testeMeta ? testeMeta[elTeste.value] : null;
+        cap.textContent = legendaDoTeste(itens.length);
+        if (!m) { info.textContent = ''; return; }
+        const partes = [];
+        if (m.preset) partes.push(m.preset);
+        partes.push(`${m.n} itens disponíveis`);
+        info.textContent = partes.join(' · ');
+    }
+
+    function estruturarDadosDaMatriz() {
+        let linhasValidas = matrizBrutaAba.filter(row =>
+            Array.isArray(row) && row.some(cell => !vazia(cell))
+        );
+
+        if (linhasValidas.length < 2) {
+            mostrarStatus('A aba selecionada tem menos de 2 linhas preenchidas.', 'erro');
+            return;
+        }
+
+        if (tabelaInvertida) {
+            const maxCols = Math.max(...linhasValidas.map(r => r.length));
+            let transposta = [];
+            for (let c = 0; c < maxCols; c++) {
+                transposta.push(linhasValidas.map(r => r[c] !== undefined ? r[c] : ''));
+            }
+            linhasValidas = transposta.filter(r => r.some(c => !vazia(c)));
+        }
+
+        const multi = analisarMultinivel(linhasValidas);
+        if (multi) {
+            colunasAtuais = multi.colunas;
+            dadosAtuais = multi.dados;
+            testeMeta = multi.meta;
+        } else {
+            testeMeta = null;
+            let idxHeader = 0;
+            for (let i = 0; i < linhasValidas.length; i++) {
+                const preenchidas = linhasValidas[i].filter(c => !vazia(c)).length;
+                if (preenchidas >= 2) {
+                    idxHeader = i;
+                    break;
+                }
+            }
+
+            const cabecalhosBrutos = linhasValidas[idxHeader];
+            colunasAtuais = [];
+            const mapaIndices = [];
+
+            cabecalhosBrutos.forEach((h, colIdx) => {
+                const temValorNaColuna = linhasValidas.slice(idxHeader + 1).some(r => !vazia(r[colIdx]));
+                const nomeBruto = !vazia(h) ? String(h).trim() : '';
+
+                if (nomeBruto !== '' || temValorNaColuna) {
+                    let nomeFinal = nomeBruto !== '' ? nomeBruto : `Coluna ${colIdx + 1}`;
+                    if (colunasAtuais.includes(nomeFinal)) nomeFinal = `${nomeFinal} (${colIdx + 1})`;
+                    colunasAtuais.push(nomeFinal);
+                    mapaIndices.push(colIdx);
+                }
+            });
+
+            dadosAtuais = [];
+            for (let r = idxHeader + 1; r < linhasValidas.length; r++) {
+                const row = linhasValidas[r];
+                const obj = {};
+                let linhaTemDado = false;
+                colunasAtuais.forEach((colName, i) => {
+                    const val = row[mapaIndices[i]];
+                    obj[colName] = !vazia(val) ? val : '';
+                    if (String(obj[colName]).trim() !== '') linhaTemDado = true;
+                });
+                if (linhaTemDado) dadosAtuais.push(obj);
+            }
+        }
+
+        let extraStatus = '';
+        if (testeMeta) {
+            const nGrupos = new Set(Object.keys(testeMeta).map(k => testeMeta[k].jogo)).size;
+            extraStatus = ` · ${nGrupos} testes`;
+        }
+        mostrarStatus(`${dadosAtuais.length} hardwares${extraStatus}`, 'sucesso');
+
+        popularSelect(elColHw, colunasAtuais);
+        popularSelect(elColPreco, colunasAtuais, true);
+
+        const idxHw = colunasAtuais.findIndex(c => /hardware|modelo|cpu|gpu|placa|processador|item|nome|série|serie/i.test(c));
+        const idxPreco = colunasAtuais.findIndex(ehColunaDePrecoBruto);
+
+        elColHw.selectedIndex = idxHw !== -1 ? idxHw : 0;
+        elColPreco.value = idxPreco !== -1 ? colunasAtuais[idxPreco] : '';
+        aplicarPrecos(true);
+
+        elColHw.disabled = false;
+        elColPreco.disabled = false;
+
+        atualizarColunasDeTeste();
+        if (!restaurarSelecaoUsuario()) {
+            selecionarPadrao();
+        }
+        atualizarTudo();
+    }
+
+    function atualizarColunasDeTeste() {
+        const colHw = elColHw.value;
+        const colPreco = elColPreco.value;
+        const anterior = elTeste.value;
+        let colunasTeste;
+
+        if (testeMeta) {
+            colunasTeste = Object.keys(testeMeta).filter(c => c !== colPreco);
+        } else {
+            colunasTeste = colunasAtuais.filter(c => c !== colHw && c !== colPreco && !ehColunaDePrecoBruto(c));
+            if (colunasTeste.length === 0 && colunasAtuais.length > 0) colunasTeste = [...colunasAtuais];
+        }
+
+        popularSelect(elTeste, colunasTeste);
+        popularSelect(cardSelectTeste, colunasTeste);
+        elTeste.disabled = false;
+
+        const usarJogoRes = !!testeMeta && colunasTeste.length > 0;
+        document.getElementById('grpJogo').style.display = usarJogoRes ? 'flex' : 'none';
+        document.getElementById('grpRes').style.display = usarJogoRes ? 'flex' : 'none';
+        document.getElementById('grpTesteBruto').style.display = usarJogoRes ? 'none' : 'flex';
+        document.getElementById('grpJogosHab').style.display = usarJogoRes ? 'flex' : 'none';
+        cardSelectJogo.style.display = usarJogoRes ? '' : 'none';
+        cardSelectRes.style.display = usarJogoRes ? '' : 'none';
+        cardSelectTeste.style.display = usarJogoRes ? 'none' : '';
+        elJogo.disabled = !usarJogoRes;
+        elRes.disabled = !usarJogoRes;
+        if (!usarJogoRes) document.getElementById('grpResHab').style.display = 'none';
+
+        if (usarJogoRes) {
+            const assin = ordenarJogos().join('|');
+            if (assin !== assinJogos) { assinJogos = assin; jogosHab = jogosPadrao(); resDesab = new Set(); }
+            renderizarListaJogos();
+
+            let ativa = (colunasTeste.includes(anterior) && testeHab(anterior)) ? anterior : null;
+            if (!ativa) {
+                const habCols = colunasTeste.filter(k => testeHab(k));
+                const comRes = habCols.filter(k => testeMeta[k].temResReal);
+                ativa = melhorChave(comRes.length ? comRes : (habCols.length ? habCols : colunasTeste));
+            }
+            elTeste.value = ativa;
+            cardSelectTeste.value = ativa;
+            popularJogoRes(ativa);
+        } else if (anterior && colunasTeste.includes(anterior)) {
+            elTeste.value = anterior;
+            cardSelectTeste.value = anterior;
+        }
+        renderizarPillsControles();
+    }
+
+    function popularSelect(elemento, opcoes, incluirVazio = false) {
+        elemento.innerHTML = '';
+        if (incluirVazio) {
+            const optVazio = document.createElement('option');
+            optVazio.value = '';
+            optVazio.textContent = '-- Sem coluna de preço --';
+            elemento.appendChild(optVazio);
+        }
+        opcoes.forEach(op => {
+            const opt = document.createElement('option');
+            opt.value = op;
+            opt.textContent = op;
+            elemento.appendChild(opt);
+        });
+    }
+
+    elTeste.addEventListener('change', () => { cardSelectTeste.value = elTeste.value; atualizarTudo(); });
+    cardSelectTeste.addEventListener('change', () => { elTeste.value = cardSelectTeste.value; atualizarTudo(); });
+    function atualizarDescricaoMetrica() {
+        const descricao = obterTextoMetrica();
+        document.getElementById('metricGuidanceSidebar').textContent = descricao;
+        document.getElementById('metricGuidanceCard').textContent = descricao;
+    }
+    elMetrica.addEventListener('change', () => {
+        cardSelectMetrica.value = elMetrica.value;
+        atualizarDescricaoMetrica();
+        atualizarTudo();
+    });
+    cardSelectMetrica.addEventListener('change', () => {
+        elMetrica.value = cardSelectMetrica.value;
+        atualizarDescricaoMetrica();
+        atualizarTudo();
+    });
+    atualizarDescricaoMetrica();
+
+    elColHw.addEventListener('change', () => {
+        aplicarPrecos(true);
+        atualizarColunasDeTeste();
+        atualizarTudo();
+    });
+    elColPreco.addEventListener('change', () => {
+        atualizarColunasDeTeste();
+        atualizarTudo();
+    });
+
+    [elEstiloGrafico, elEsquemaCor, elAutoH, elCriterio, elUsarPills, elCompRelativa, elLinhaRef].forEach(el => el.addEventListener('change', () => {
+        document.getElementById('grpLinhaRefFixo').style.display = elLinhaRef.value === 'fixo' ? 'grid' : 'none';
+        if (dadosAtuais.length > 0) atualizarTudo();
+        else renderizarPillsControles();
+    }));
+    [elLinhaRefValor, elLinhaRefRotulo].forEach(el => el.addEventListener('input', () => {
+        if (dadosAtuais.length > 0 && elLinhaRef.value === 'fixo') atualizarTudo();
+    }));
+
+    function sincronizarControlesAparencia() {
+        elAutoH.disabled = elEstiloGrafico.value === 'h';
+        btnSortearCores.style.display = elEsquemaCor.value === 'flourish' ? '' : 'none';
+    }
+    elEstiloGrafico.addEventListener('change', sincronizarControlesAparencia);
+    elEsquemaCor.addEventListener('change', sincronizarControlesAparencia);
+    sincronizarControlesAparencia();
+    btnSortearCores.addEventListener('click', () => {
+        paletaAleatoria = embaralharPaleta(Math.floor(Math.random() * 1e9) + 1);
+        if (dadosAtuais.length > 0) atualizarTudo();
+    });
+    var _rzEd, _estreitoEd = window.innerWidth < LARGURA_TELEFONE;
+    window.addEventListener('resize', () => {
+        clearTimeout(_rzEd);
+        _rzEd = setTimeout(() => {
+            const agora = window.innerWidth < LARGURA_TELEFONE;
+            if (agora !== _estreitoEd) { _estreitoEd = agora; if (dadosAtuais.length > 0) atualizarTudo(); }
+        }, 150);
+    });
+
+    function renderizarListaBarras() {
+        const scroll = elListaBarras.scrollTop;
+        const colHw = elColHw.value;
+        const termo = norm(elBarrasBusca.value);
+        elListaBarras.innerHTML = '';
+        document.getElementById('contBarras').textContent = dadosAtuais.length ? `(${indicesSelecionados.size})` : '';
+        if (!dadosAtuais.length) {
+            elListaBarras.innerHTML = '<div class="hint" style="padding:8px;">Carregue uma planilha.</div>';
+            return;
+        }
+        let mostrados = 0;
+        dadosAtuais.forEach((linha, idx) => {
+            const nome = String(linha[colHw] || ('Linha ' + (idx + 1)));
+            if (termo && !norm(nome).includes(termo)) return;
+            if (!passaFaixaPreco(idx) && !indicesSelecionados.has(idx)) return;
+            mostrados++;
+            const motivo = motivoIndisponibilidade(idx);
+            const cor = classificarHardware(nome, obterCategoriaLinha(linha));
+            const lbl = document.createElement('label');
+            lbl.className = 'barra-item' + (motivo ? ' sem-dado' : '');
+            if (motivo) lbl.title = 'Sem valor no teste/métrica atual: ' + motivo;
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.checked = indicesSelecionados.has(idx);
+            cb.addEventListener('change', () => { alternarSelecao(idx); atualizarTudo(); });
+            const dot = document.createElement('span');
+            dot.className = 'dot';
+            dot.style.background = cor.bg;
+            const sp = document.createElement('span');
+            sp.className = 'barra-nome';
+            sp.textContent = nome + (motivo ? ' ⚠️' : '');
+            lbl.appendChild(cb); lbl.appendChild(dot); lbl.appendChild(sp);
+            elListaBarras.appendChild(lbl);
+        });
+        if (!mostrados) elListaBarras.innerHTML = '<div class="hint" style="padding:8px;">' + (faixaAtual() ? 'Nenhum hardware nesta faixa de preço.' : 'Nenhum hardware encontrado.') + '</div>';
+        elListaBarras.scrollTop = scroll;
+    }
+    elBarrasBusca.addEventListener('input', renderizarListaBarras);
+
+    seriesInputBox.addEventListener('click', () => {
+        seriesSearchInput.focus();
+        seriesDropdown.classList.add('open');
+        renderizarDropdownSeries(seriesSearchInput.value);
+    });
+
+    seriesSearchInput.addEventListener('focus', () => {
+        seriesDropdown.classList.add('open');
+        renderizarDropdownSeries(seriesSearchInput.value);
+    });
+
+    seriesSearchInput.addEventListener('input', (e) => {
+        seriesDropdown.classList.add('open');
+        renderizarDropdownSeries(e.target.value);
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!document.getElementById('seriesPickerContainer').contains(e.target)) {
+            seriesDropdown.classList.remove('open');
+        }
+    });
+
+    function renderizarDropdownSeries(filtro = '') {
+        const colHw = elColHw.value;
+        const termo = filtro.toLowerCase();
+        seriesDropdown.innerHTML = '';
+
+        dadosAtuais.forEach((linha, idx) => {
+            const nome = String(linha[colHw] || `Linha ${idx + 1}`);
+            const infoCat = classificarHardware(nome, obterCategoriaLinha(linha));
+            if (!nome.toLowerCase().includes(termo) && !infoCat.cat.toLowerCase().includes(termo)) return;
+            if (!passaFaixaPreco(idx) && !indicesSelecionados.has(idx)) return;
+
+            const div = document.createElement('div');
+            const ativo = indicesSelecionados.has(idx);
+            const motivo = motivoIndisponibilidade(idx);
+            div.className = 'fl-dropdown-item' + (ativo ? ' selected' : '');
+
+            let hintTexto = ativo ? '✓ Selecionado' : 'Selecionar';
+            if (motivo) {
+                hintTexto = ativo ? `✓ Selecionado (${motivo})` : `Selecionar (${motivo})`;
+            }
+
+            const badgeCat = infoCat.cat !== 'Outros'
+                ? `<span style="display:inline-block;margin-left:8px;padding:1px 6px;border-radius:3px;font-size:0.72rem;font-weight:700;background:${infoCat.bg};color:${infoCat.txt};">${infoCat.cat}</span>`
+                : '';
+
+            div.innerHTML = `
+                <span>${nome}${badgeCat}</span>
+                <span class="fl-press-hint">${hintTexto}</span>
+            `;
+
+            div.addEventListener('click', (e) => {
+                e.stopPropagation();
+                alternarSelecao(idx);
+                atualizarTudo();
+                renderizarDropdownSeries(seriesSearchInput.value);
+            });
+
+            seriesDropdown.appendChild(div);
+        });
+    }
+
+    function renderizarChipsSeries() {
+        const colHw = elColHw.value;
+        const esquema = elEsquemaCor.value;
+        seriesChips.innerHTML = '';
+
+        Array.from(indicesSelecionados).forEach((idx, pos) => {
+            const linha = dadosAtuais[idx];
+            if (!linha) return;
+            const nome = linha[colHw] || `Item ${idx + 1}`;
+            const cor = obterEstiloCor(nome, pos, esquema, obterCategoriaLinha(linha));
+            const motivo = motivoIndisponibilidade(idx);
+
+            const chip = document.createElement('span');
+            chip.className = 'fl-chip' + (motivo ? ' chip-warn' : '');
+            chip.title = motivo ? `Selecionado, mas ${motivo} na visualização atual` : `${nome} (${cor.cat || ''})`;
+            chip.innerHTML = `
+                <span class="fl-chip-dot" style="background:${cor.bg}"></span>
+                <span>${nome}${motivo ? ' ⚠️' : ''}</span>
+                <span class="fl-chip-remove" title="Remover">×</span>
+            `;
+            chip.querySelector('.fl-chip-remove').addEventListener('click', (e) => {
+                e.stopPropagation();
+                selecaoAlteradaManualmente = true;
+                indicesSelecionados.delete(idx);
+                salvarSelecaoUsuario();
+                atualizarTudo();
+            });
+            seriesChips.appendChild(chip);
+        });
+    }
+
+    function limparNumero(val) {
+        if (typeof val === 'number') return val;
+        if (val === null || val === undefined) return NaN;
+        let str = String(val).trim().replace(/[^\d.,-]/g, '');
+        if (!str) return NaN;
+        if (str.includes(',') && str.includes('.')) {
+            if (str.lastIndexOf(',') > str.lastIndexOf('.')) str = str.replace(/\./g, '').replace(',', '.');
+            else str = str.replace(/,/g, '');
+        } else if (str.includes(',')) {
+            str = str.replace(',', '.');
+        }
+        return parseFloat(str);
+    }
+
+    function atualizarTudo() {
+        if (dadosAtuais.length === 0) return;
+
+        const colHw = elColHw.value;
+        const colPreco = elColPreco.value;
+        const colTeste = elTeste.value;
+        const metrica = elMetrica.value;
+        const esquema = elEsquemaCor.value;
+
+        elEmptyState.style.display = 'none';
+        document.getElementById('abaGrafico').style.display = abaVisualAtiva === 'abaGrafico' ? 'block' : 'none';
+        document.getElementById('abaPlanilha').style.display = abaVisualAtiva === 'abaPlanilha' ? 'block' : 'none';
+
+        atualizarDescricaoMetrica();
+        atualizarInfoFaixa();
+        popularPrincipal();
+        renderizarPillsControles();
+        renderizarChipsSeries();
+        renderizarListaBarras();
+
+        const itensProcessados = construirItens({
+            dados: dadosAtuais, idxs: Array.from(indicesSelecionados), colHw, colPreco, teste: colTeste, metrica,
+            meta: testeMeta, corFn: (n, p, l) => obterEstiloCor(n, p, esquema, obterCategoriaLinha(l)), ordem: ordemBase(),
+            compRelativa: elCompRelativa.checked, principalNome: principalNome
+        });
+        let idxVencedor = -1;
+        if (itensProcessados.length) idxVencedor = itensProcessados.reduce((a, b) => (metrica === 'custo_ponto' ? b.val < a.val : b.val > a.val) ? b : a).idx;
+
+        const vazio = (metrica !== 'bruto' && !colPreco)
+            ? 'Carregue a base de preços para calcular o custo por FPS, ou troque a métrica para Desempenho.'
+            : (faixaAtual() && !indicesSelecionados.size)
+                ? 'Nenhum hardware com valor neste teste dentro da faixa de preço escolhida. Experimente outra faixa.'
+                : 'Nenhum hardware selecionado possui valor neste teste/resolução.';
+        const vis = prepararVisual(itensProcessados, cfgVisual());
+        renderizarGrafico(document.getElementById('graficoVersus'), vis.itens, {
+            orient: vis.orient, pos: elPosNomes.value, esquemaCor: esquema, vazio, linhaRef: cfgLinhaRef()
+        });
+        atualizarLegendaTeste(itensProcessados);
+        renderizarPlanilhaColorida(colHw, colPreco, colTeste, idxVencedor);
+    }
+
+    function renderizarPlanilhaColorida(colHw, colPreco, colTeste, idxVencedor) {
+        const tabela = document.getElementById('tabelaDados');
+        const thead = tabela.querySelector('thead');
+        const tbody = tabela.querySelector('tbody');
+
+        thead.innerHTML = '';
+        tbody.innerHTML = '';
+
+        const trHead = document.createElement('tr');
+        colunasAtuais.forEach(col => {
+            const th = document.createElement('th');
+            th.textContent = col;
+            if (col === colHw) th.classList.add('col-hw');
+            else if (col === colPreco) th.classList.add('col-preco');
+            else if (col === colTeste) th.classList.add('col-teste');
+
+            if (col !== colHw && col !== colPreco) {
+                th.addEventListener('click', () => {
+                    if (testeMeta && !testeHab(col)) return;
+                    elTeste.value = col;
+                    cardSelectTeste.value = col;
+                    sincronizarJogoRes();
+                    atualizarTudo();
+                });
+            }
+            trHead.appendChild(th);
+        });
+        thead.appendChild(trHead);
+
+        dadosAtuais.forEach((linha, idx) => {
+            const tr = document.createElement('tr');
+            if (!indicesSelecionados.has(idx)) tr.classList.add('row-inactive');
+
+            tr.addEventListener('click', () => {
+                alternarSelecao(idx);
+                atualizarTudo();
+            });
+
+            colunasAtuais.forEach(col => {
+                const td = document.createElement('td');
+                let valorCelula = linha[col] !== null && linha[col] !== undefined && linha[col] !== '' ? linha[col] : '-';
+                if (col === colHw) td.classList.add('col-hw');
+                else if (col === colPreco) td.classList.add('col-preco');
+                else if (col === colTeste) {
+                    td.classList.add('col-teste');
+                    if (idx === idxVencedor) {
+                        td.classList.add('cell-winner');
+                        valorCelula = `🏆 ${valorCelula}`;
+                    }
+                }
+                td.textContent = valorCelula;
+                tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+        });
+    }
+
+    // Exportador HTML Standalone (100% independente e funciona sem internet)
+    btnExportar.addEventListener('click', () => {
+        const colCat = colunasAtuais.find(c => /^(socket|soquete|serie|série|geracao|geração|categoria|plataforma|arquitetura)$/i.test(norm(c))) || '';
+        const tituloAtual = elPreviewTitulo.textContent.trim() || 'Performance e Custo';
+        const subtituloAtual = elPreviewSubtitulo.textContent.trim();
+        const escHtml = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+        const configExportacao = {
+            titulo: tituloAtual,
+            subtitulo: subtituloAtual,
+            fonte: fonteTextoBruto,
+            orientacao: elEstiloGrafico.value,
+            esquemaCor: elEsquemaCor.value,
+            metricaInicial: elMetrica.value,
+            colHw: elColHw.value,
+            colCat: colCat,
+            colPreco: elColPreco.value,
+            testeInicial: elTeste.value,
+            colunasTeste: testeMeta ? Object.keys(testeMeta).filter(c => c !== elColPreco.value && testeHab(c)) : colunasAtuais.filter(c => c !== elColHw.value && c !== elColPreco.value),
+            testeMeta: testeMeta,
+            posNomes: elPosNomes.value,
+            maxPlacas: maxPlacas(),
+            soDesempenho: MODO_SO_DESEMPENHO,
+            ordem: ordemBase(),
+            lado: elOrdem.value,
+            autoHTelefone: elAutoH.checked,
+            limiteTelefone: LIMITE_BARRAS_TELEFONE,
+            larguraTelefone: LARGURA_TELEFONE,
+            paleta: paletaAleatoria,
+            usarPills: elUsarPills.checked,
+            compRelativa: elCompRelativa.checked,
+            linhaRef: cfgLinhaRef(),
+            faixas: faixasParaCard(),
+            faixaInicial: elFaixaPreco.value,
+            faixaNoCard: faixaVisivelNoCard(),
+            principal: principalNome ? { nome: principalNome, bg: elCorPrincipal.value, txt: textoContraste(elCorPrincipal.value) } : null,
+            indicesIniciais: Array.from(indicesSelecionados),
+            dados: dadosAtuais
+        };
+
+        const jsonEmbutido = JSON.stringify(configExportacao);
+        const tagScriptClose = '</scr' + 'ipt>';
+
+        const htmlStandalone = `<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${escHtml(configExportacao.titulo)}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Inter', sans-serif; background: #f3f4f6; padding: 24px; color: #222; }
+        .flourish-card { background: #fff; max-width: 1050px; margin: 0 auto; padding: 32px 36px 24px 36px; border-radius: 6px; box-shadow: 0 2px 16px rgba(0,0,0,0.06); }
+        .fl-title { font-size: 1.65rem; font-weight: 700; color: #333; margin-bottom: 6px; letter-spacing: -0.3px; }
+        .fl-subtitle { font-size: 1.02rem; color: #555; margin-bottom: 20px; }
+        .fl-caption { font-size: 0.92rem; font-weight: 600; color: #555; margin: -4px 0 14px 0; }
+        .fl-controls-row { display: flex; flex-wrap: wrap; gap: 14px 18px; align-items: center; margin-bottom: 14px; }
+        .fl-select-minimal { background: transparent; border: none; border-bottom: 1px solid #d1d5db; padding: 6px 28px 6px 2px; font-size: 0.92rem; font-weight: 700; color: #222; cursor: pointer; outline: none; }
+        .metric-guidance-badge { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 4px; font-size: 0.82rem; font-weight: 700; background: #f3f4f6; color: #1f2937; border: 1px solid #d1d5db; }
+        .fl-series-picker { position: relative; margin-bottom: 20px; }
+        .fl-series-input-box { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; border: 1px solid #e5e7eb; padding: 7px 12px; border-radius: 4px; background: #fff; cursor: text; }
+        .fl-chip { background: #f3f4f6; border: 1px solid #d1d5db; color: #1f2937; font-size: 0.78rem; font-weight: 600; padding: 3px 8px; border-radius: 3px; display: inline-flex; align-items: center; gap: 6px; }
+        .fl-chip.chip-warn { opacity: 0.65; border-style: dashed; }
+        .fl-chip-dot { width: 8px; height: 8px; border-radius: 50%; }
+        .fl-chip-remove { cursor: pointer; color: #6b7280; font-weight: 700; }
+        .fl-chip-remove:hover { color: #ef4444; }
+        .fl-series-search { border: none; background: transparent; color: #222; padding: 4px; font-size: 0.9rem; flex: 1; min-width: 180px; outline: none; }
+        .fl-series-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #d1d5db; border-top: none; max-height: 230px; overflow-y: auto; z-index: 50; box-shadow: 0 8px 16px rgba(0,0,0,0.12); display: none; }
+        .fl-series-dropdown.open { display: block; }
+        .fl-dropdown-item { padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; cursor: pointer; }
+        .fl-dropdown-item:hover { background: #e5e7eb; }
+        .fl-dropdown-item.selected { background: #f3f4f6; font-weight: 600; }
+        .fl-press-hint { font-size: 0.8rem; color: #4b5563; }
+        .fl-chart-area { width: 100%; min-height: 380px; padding: 10px 0; }
+        .fl-chart-v { display: flex; height: 390px; margin-top: 16px; position: relative; padding-left: 42px; padding-bottom: 52px; align-items: flex-end; gap: 14px; border-bottom: 1px solid #e5e7eb; container-type: inline-size; }
+        .fl-y-grid { position: absolute; left: 42px; right: 0; top: 0; bottom: 52px; pointer-events: none; }
+        .fl-grid-line { position: absolute; left: 0; right: 0; border-top: 1px solid #f0f0f0; }
+        .fl-grid-label { position: absolute; left: -40px; top: -9px; width: 32px; text-align: right; font-size: 0.8rem; color: #666; }
+        .fl-v-col { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; position: relative; z-index: 2; }
+        .fl-v-bar { width: 100%; max-width: 120px; min-height: 28px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; font-weight: 700; font-size: clamp(0.9rem, calc(100cqw / (var(--n, 8) * 4.5)), 1.4rem); transition: height 0.25s ease; line-height: 1.1; }
+        .fl-chart-h { display: flex; flex-direction: column; gap: 14px; padding: 10px 0; }
+        .fl-h-row { display: grid; grid-template-columns: 170px 1fr; align-items: center; gap: 14px; }
+        .fl-h-label { font-size: 0.85rem; font-weight: 600; line-height: 1.2; color: #222; text-align: right; white-space: normal; word-break: break-word; }
+        .fl-h-track { background: #f9fafb; height: 44px; display: flex; align-items: center; position: relative; }
+        .fl-h-bar { height: 100%; min-width: 48px; display: flex; align-items: center; justify-content: center; gap: 6px; font-weight: 700; font-size: 1.2rem; transition: width 0.25s ease; position: relative; z-index: 1; padding: 0 8px; }
+        .fl-footer { margin-top: 22px; font-size: 1.02rem; font-weight: 700; color: #333; }
+        @media (max-width: 640px) {
+            body { padding: 10px; }
+            .flourish-card { padding: 18px 14px 16px 14px; }
+            .fl-title { font-size: 1.3rem; }
+            .fl-subtitle { font-size: 0.9rem; margin-bottom: 14px; }
+            .fl-controls-row { gap: 10px 14px; }
+            .fl-select-minimal { max-width: 100%; font-size: 0.85rem; }
+            .fl-series-search { min-width: 100px; }
+            .fl-footer { font-size: 0.9rem; }
+        }
+${CSS_EXTRA}
+    </style>
+</head>
+<body>
+<div class="flourish-card">
+    <div class="fl-title" id="flTitle"></div>
+    <div class="fl-subtitle" id="flSubtitle"></div>
+    <div class="fl-controls-row">
+        <select id="selJogo" class="fl-select-minimal" style="display:none"></select>
+        <select id="selRes" class="fl-select-minimal" style="display:none"></select>
+        <div id="pillsRes" class="fl-pills" style="display:none"></div>
+        <select id="selTeste" class="fl-select-minimal"></select>
+        <select id="selMetrica" class="fl-select-minimal">
+            <option value="bruto">Métrica: Desempenho (FPS / Pts)</option>
+            <option value="custo_ponto" selected>Métrica: Custo por FPS (R$)</option>
+        </select>
+        <div id="pillsMetrica" class="fl-pills" style="display:none"></div>
+        <select id="selFaixa" class="fl-select-minimal" style="display:none"></select>
+        <div id="pillsFaixa" class="fl-pills" style="display:none"></div>
+        <span class="metric-guidance-badge" id="flMetricGuidance">Maior é melhor</span>
+    </div>
+    <div class="fl-caption" id="flCaption"></div>
+    <div class="fl-series-picker" id="pickerBox">
+        <div class="fl-series-input-box" id="inputBox">
+            <div id="chipsContainer" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
+            <input type="text" id="searchInput" class="fl-series-search" placeholder="Filtrar ou adicionar hardware..." autocomplete="off" />
+        </div>
+        <div class="fl-series-dropdown" id="dropdownList"></div>
+    </div>
+    <div id="graficoVersus" class="fl-chart-area"></div>
+    <div class="fl-footer" id="flFooter"></div>
+</div>
+<script>
+${classificarHardware.toString()}
+${linkificar.toString()}
+${construirItens.toString()}
+${renderizarGrafico.toString()}
+${prepararVisual.toString()}
+    const CFG = ${jsonEmbutido};
+    const paleta = CFG.paleta || [{bg:'#2563eb',txt:'#fff'},{bg:'#dc2626',txt:'#fff'},{bg:'#16a34a',txt:'#fff'},{bg:'#f59e0b',txt:'#000'},{bg:'#7c3aed',txt:'#fff'},{bg:'#0891b2',txt:'#fff'},{bg:'#db2777',txt:'#fff'},{bg:'#65a30d',txt:'#fff'},{bg:'#ea580c',txt:'#fff'},{bg:'#475569',txt:'#fff'},{bg:'#0d9488',txt:'#fff'},{bg:'#a16207',txt:'#fff'}];
+    let selecionados = new Set(CFG.indicesIniciais);
+
+    document.getElementById('flTitle').textContent = CFG.titulo;
+    document.getElementById('flSubtitle').textContent = CFG.subtitulo;
+    document.getElementById('flFooter').innerHTML = linkificar(CFG.fonte);
+
+    const selTeste = document.getElementById('selTeste');
+    const selMetrica = document.getElementById('selMetrica');
+    const pillsRes = document.getElementById('pillsRes');
+    const pillsMetrica = document.getElementById('pillsMetrica');
+    const flMetricGuidance = document.getElementById('flMetricGuidance');
+    CFG.colunasTeste.forEach(c => {
+        const o = document.createElement('option');
+        o.value = c; o.textContent = c;
+        selTeste.appendChild(o);
+    });
+    selTeste.value = CFG.testeInicial;
+    selMetrica.value = CFG.metricaInicial;
+    if (CFG.soDesempenho) selMetrica.style.display = 'none';
+
+    function motivoItem(i) {
+        const l = CFG.dados[i];
+        if (!l || !(limparNum(l[selTeste.value]) > 0)) return 'sem dado neste teste';
+        if (selMetrica.value !== 'bruto' && !(limparNum(l[CFG.colPreco]) > 0)) return 'sem preço';
+        return '';
+    }
+
+    const META = CFG.testeMeta;
+    const selJogo = document.getElementById('selJogo');
+    const selRes = document.getElementById('selRes');
+
+    function renderPills() {
+        const temSub = !!(META && selRes.options.length > 1);
+        if (CFG.usarPills && temSub) {
+            selRes.style.display = 'none';
+            pillsRes.style.display = 'inline-flex';
+            pillsRes.innerHTML = '';
+            Array.from(selRes.options).forEach(function (opt) {
+                const m = META[opt.value];
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'fl-pill-btn' + (opt.value === selRes.value ? ' active' : '');
+                b.textContent = (m && m.resRotulo) ? m.resRotulo.replace(/\\s*\\([^)]*\\)/g, '') : opt.textContent;
+                b.onclick = function () { selRes.value = opt.value; selTeste.value = opt.value; atualizar(); };
+                pillsRes.appendChild(b);
+            });
+        } else {
+            pillsRes.style.display = 'none';
+            selRes.style.display = temSub ? '' : 'none';
+        }
+
+        if (CFG.soDesempenho) {
+            selMetrica.style.display = 'none';
+            pillsMetrica.style.display = 'none';
+        } else if (CFG.usarPills) {
+            selMetrica.style.display = 'none';
+            pillsMetrica.style.display = 'inline-flex';
+            pillsMetrica.innerHTML = '';
+            [{ v: 'bruto', t: 'Desempenho' }, { v: 'custo_ponto', t: 'Custo / FPS' }].forEach(function (op) {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'fl-pill-btn' + (selMetrica.value === op.v ? ' active' : '');
+                b.textContent = op.t;
+                b.onclick = function () { selMetrica.value = op.v; atualizar(); };
+                pillsMetrica.appendChild(b);
+            });
+        } else {
+            pillsMetrica.style.display = 'none';
+            selMetrica.style.display = '';
+        }
+    }
+
+    function popRes(jogo, resKeyPref, chave) {
+        selRes.innerHTML = '';
+        const ks = Object.keys(META).filter(function (k) { return META[k].jogo === jogo && CFG.colunasTeste.indexOf(k) >= 0; })
+            .sort(function (a, b) { return META[a].ordem - META[b].ordem; });
+        ks.forEach(function (k) {
+            const o = document.createElement('option');
+            o.value = k;
+            o.textContent = (META[k].resRotulo || 'Valor padrão') + ' (' + META[k].n + ')';
+            selRes.appendChild(o);
+        });
+        let esc = (chave && ks.indexOf(chave) >= 0) ? chave : null;
+        if (!esc && resKeyPref) {
+            ks.forEach(function (k) { if (!esc && META[k].resKey === resKeyPref && META[k].n > 0) esc = k; });
+            if (!esc) {
+                var baseRes = resKeyPref.split('-')[0];
+                ks.forEach(function (k) { if (!esc && META[k].resKey.indexOf(baseRes) === 0 && META[k].ehMediaCol && META[k].n > 0) esc = k; });
+                ks.forEach(function (k) { if (!esc && META[k].resKey.indexOf(baseRes) === 0 && META[k].n > 0) esc = k; });
+            }
+        }
+        if (!esc) {
+            esc = ks[0];
+            ks.forEach(function (k) {
+                if (META[k].ehMediaCol && !META[esc].ehMediaCol) esc = k;
+                else if (META[k].ehMediaCol === META[esc].ehMediaCol && META[k].n > META[esc].n) esc = k;
+            });
+        }
+        selRes.value = esc;
+        selTeste.value = esc;
+        renderPills();
+    }
+    if (META && CFG.colunasTeste.length) {
+        selTeste.style.display = 'none';
+        selJogo.style.display = '';
+        const jogos = [];
+        CFG.colunasTeste.forEach(function (k) {
+            if (META[k] && jogos.indexOf(META[k].jogo) < 0) jogos.push(META[k].jogo);
+        });
+        jogos.forEach(function (j) {
+            const o = document.createElement('option');
+            o.value = j; o.textContent = j;
+            selJogo.appendChild(o);
+        });
+        const inicial = META[CFG.testeInicial] ? CFG.testeInicial : CFG.colunasTeste[0];
+        selJogo.value = META[inicial].jogo;
+        popRes(META[inicial].jogo, META[inicial].resKey, inicial);
+        selJogo.onchange = function () {
+            popRes(selJogo.value, META[selTeste.value].resKey, null);
+            atualizar();
+        };
+        selRes.onchange = function () {
+            selTeste.value = selRes.value;
+            atualizar();
+        };
+    }
+
+    function corItem(nome, pos, linha) {
+        const catExp = (linha && CFG.colCat) ? String(linha[CFG.colCat] || '') : '';
+        const infoGen = classificarHardware(nome, catExp);
+        if (CFG.principal && String(nome) === CFG.principal.nome) return { bg: CFG.principal.bg, txt: CFG.principal.txt, cat: infoGen.cat, principal: true };
+        if (CFG.esquemaCor === 'geracoes') return infoGen;
+        if (CFG.esquemaCor === 'flourish') {
+            const p = paleta[pos % paleta.length];
+            return { bg: p.bg, txt: p.txt, cat: infoGen.cat };
+        }
+        const n = String(nome).toLowerCase();
+        if (/nvidia|geforce|rtx|gtx/i.test(n)) return { bg: '#1a8000', txt: '#fff', cat: infoGen.cat };
+        if (/amd|ryzen|radeon|\\brx\\b|threadripper|epyc|athlon/i.test(n)) return { bg: '#f00000', txt: '#fff', cat: infoGen.cat };
+        if (/intel|core|ultra|\\barc\\b|\\bi[3579]\\b|xeon|pentium|celeron/i.test(n)) return { bg: '#1010ff', txt: '#fff', cat: infoGen.cat };
+        return { bg: '#64748b', txt: '#fff', cat: infoGen.cat };
+    }
+
+    function limparNum(v) {
+        if (typeof v === 'number') return v;
+        if (v === null || v === undefined) return NaN;
+        let s = String(v).trim().replace(/[^\\d.,-]/g, '');
+        if (!s) return NaN;
+        if (s.includes(',') && s.includes('.')) {
+            if (s.lastIndexOf(',') > s.lastIndexOf('.')) s = s.replace(/\\./g, '').replace(',', '.');
+            else s = s.replace(/,/g, '');
+        } else if (s.includes(',')) s = s.replace(',', '.');
+        return parseFloat(s);
+    }
+
+    const searchInput = document.getElementById('searchInput');
+    const dropdownList = document.getElementById('dropdownList');
+    const inputBox = document.getElementById('inputBox');
+
+    inputBox.addEventListener('click', () => { searchInput.focus(); dropdownList.classList.add('open'); renderDropdown(searchInput.value); });
+    searchInput.addEventListener('focus', () => { dropdownList.classList.add('open'); renderDropdown(searchInput.value); });
+    searchInput.addEventListener('input', e => { dropdownList.classList.add('open'); renderDropdown(e.target.value); });
+    document.addEventListener('click', e => { if (!document.getElementById('pickerBox').contains(e.target)) dropdownList.classList.remove('open'); });
+
+    function renderDropdown(f = '') {
+        dropdownList.innerHTML = '';
+        const t = f.toLowerCase();
+        CFG.dados.forEach((l, i) => {
+            const nome = String(l[CFG.colHw] || '');
+            const catExp = CFG.colCat ? String(l[CFG.colCat] || '') : '';
+            const infoGen = classificarHardware(nome, catExp);
+            if (!nome || (!nome.toLowerCase().includes(t) && !infoGen.cat.toLowerCase().includes(t))) return;
+            if (!passaFaixa(i) && !selecionados.has(i)) return;
+            const d = document.createElement('div');
+            const ativo = selecionados.has(i);
+            const mot = motivoItem(i);
+            d.className = 'fl-dropdown-item' + (ativo ? ' selected' : '');
+            const hint = ativo ? ('✓ Selecionado' + (mot ? ' (' + mot + ')' : '')) : ('Selecionar' + (mot ? ' (' + mot + ')' : ''));
+            const badge = infoGen.cat !== 'Outros' ? '<span style="display:inline-block;margin-left:8px;padding:1px 6px;border-radius:3px;font-size:0.72rem;font-weight:700;background:' + infoGen.bg + ';color:' + infoGen.txt + '">' + infoGen.cat + '</span>' : '';
+            d.innerHTML = '<span>' + nome + badge + '</span><span class="fl-press-hint">' + hint + '</span>';
+            d.onclick = (e) => {
+                e.stopPropagation();
+                if (selecionados.has(i)) selecionados.delete(i); else selecionados.add(i);
+                atualizar(); renderDropdown(searchInput.value);
+            };
+            dropdownList.appendChild(d);
+        });
+    }
+
+    function atualizar() {
+        renderPills();
+        renderFaixa();
+        const chips = document.getElementById('chipsContainer');
+        chips.innerHTML = '';
+        const teste = selTeste.value, metrica = selMetrica.value;
+        const txtGuia = metrica === 'custo_ponto' ? 'Menor é melhor' : 'Maior é melhor';
+        flMetricGuidance.textContent = txtGuia;
+
+        Array.from(selecionados).forEach((idx, pos) => {
+            const l = CFG.dados[idx]; if (!l) return;
+            const nome = l[CFG.colHw], cor = corItem(nome, pos, l), mot = motivoItem(idx);
+            const chip = document.createElement('span');
+            chip.className = 'fl-chip' + (mot ? ' chip-warn' : '');
+            chip.innerHTML = '<span class="fl-chip-dot" style="background:' + cor.bg + '"></span><span>' + nome + (mot ? ' ⚠️' : '') + '</span><span class="fl-chip-remove">×</span>';
+            chip.querySelector('.fl-chip-remove').onclick = (e) => { e.stopPropagation(); selecionados.delete(idx); atualizar(); };
+            chips.appendChild(chip);
+        });
+        const itens = construirItens({
+            dados: CFG.dados, idxs: Array.from(selecionados), colHw: CFG.colHw, colPreco: CFG.colPreco, teste: teste, metrica: metrica,
+            meta: CFG.testeMeta, corFn: corItem, ordem: CFG.ordem,
+            compRelativa: !!CFG.compRelativa, principalNome: CFG.principal ? CFG.principal.nome : ''
+        });
+        const capEl = document.getElementById('flCaption'), mm = CFG.testeMeta ? CFG.testeMeta[teste] : null;
+        capEl.textContent = mm
+            ? mm.jogo + (mm.resRotulo ? ' · ' + mm.resRotulo : '') + (mm.preset ? ' · ' + mm.preset : '') + ' — ' + itens.length + (itens.length === 1 ? ' item comparado' : ' itens comparados') + ' · ' + txtGuia
+            : teste + ' — ' + itens.length + (itens.length === 1 ? ' item comparado' : ' itens comparados') + ' · ' + txtGuia;
+        const vis = prepararVisual(itens, { orient: CFG.orientacao, auto: CFG.autoHTelefone, limite: CFG.limiteTelefone, larguraTelefone: CFG.larguraTelefone, largura: window.innerWidth, lado: CFG.lado });
+        renderizarGrafico(document.getElementById('graficoVersus'), vis.itens, {
+            orient: vis.orient, pos: CFG.posNomes, esquemaCor: CFG.esquemaCor,
+            vazio: 'Nenhum item selecionado tem este teste nesta resolução (ou falta preço).',
+            linhaRef: CFG.linhaRef
+        });
+    }
+
+    const selFaixa = document.getElementById('selFaixa');
+    const pillsFaixa = document.getElementById('pillsFaixa');
+    let faixaV = CFG.faixaInicial || 'todas';
+    function faixaDe(v) {
+        if (!CFG.faixaNoCard || !v || v === 'todas' || !CFG.colPreco) return null;
+        const p = v.split('-');
+        return { min: parseFloat(p[0]), max: p[1] === '' ? Infinity : parseFloat(p[1]) };
+    }
+    function passaFaixa(i) {
+        const f = faixaDe(faixaV);
+        if (!f) return true;
+        const l = CFG.dados[i];
+        const pr = l ? limparNum(l[CFG.colPreco]) : NaN;
+        return pr > 0 && pr >= f.min && pr < f.max;
+    }
+    function melhoresNaFaixa() {
+        const t = selTeste.value, ids = [];
+        CFG.dados.forEach(function (l, i) {
+            if (l && passaFaixa(i) && !motivoItem(i)) ids.push({ i: i, v: limparNum(l[t]) });
+        });
+        ids.sort(function (a, b) { return b.v - a.v; });
+        const max = CFG.maxPlacas || 6;
+        const lista = ids.slice(0, max).map(function (x) { return x.i; });
+        if (CFG.principal) {
+            const ip = CFG.dados.findIndex(function (l) { return l && String(l[CFG.colHw]) === CFG.principal.nome; });
+            if (ip >= 0 && lista.indexOf(ip) < 0) { if (lista.length >= max) lista.pop(); lista.push(ip); }
+        }
+        return lista;
+    }
+    function escolherFaixa(v) {
+        faixaV = v;
+        selecionados = (v === CFG.faixaInicial) ? new Set(CFG.indicesIniciais) : new Set(melhoresNaFaixa());
+        atualizar();
+    }
+    function renderFaixa() {
+        if (!CFG.faixaNoCard || !CFG.faixas || !CFG.faixas.length) {
+            selFaixa.style.display = 'none'; pillsFaixa.style.display = 'none'; return;
+        }
+        if (CFG.usarPills) {
+            selFaixa.style.display = 'none';
+            pillsFaixa.style.display = 'inline-flex';
+            pillsFaixa.innerHTML = '';
+            CFG.faixas.forEach(function (f) {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'fl-pill-btn' + (f.v === faixaV ? ' active' : '');
+                b.textContent = f.p; b.title = f.t;
+                b.onclick = function () { escolherFaixa(f.v); };
+                pillsFaixa.appendChild(b);
+            });
+        } else {
+            pillsFaixa.style.display = 'none';
+            selFaixa.innerHTML = '';
+            CFG.faixas.forEach(function (f) {
+                const o = document.createElement('option');
+                o.value = f.v; o.textContent = f.t;
+                selFaixa.appendChild(o);
+            });
+            selFaixa.value = faixaV;
+            selFaixa.style.display = '';
+        }
+    }
+    selFaixa.onchange = function () { escolherFaixa(selFaixa.value); };
+
+    selTeste.onchange = atualizar;
+    selMetrica.onchange = atualizar;
+    var _rz, _estreito = window.innerWidth < 560;
+    window.addEventListener('resize', function () {
+        clearTimeout(_rz);
+        _rz = setTimeout(function () {
+            const agora = window.innerWidth < 560;
+            if (agora !== _estreito) { _estreito = agora; atualizar(); }
+        }, 150);
+    });
+    atualizar();
+${tagScriptClose}
+</body>
+</html>`;
+
+        const blob = new Blob([htmlStandalone], { type: 'text/html;charset=utf-8' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        const nomeArquivo = tituloAtual.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'grafico-versus';
+        link.download = `${nomeArquivo}.html`;
+        link.click();
+    });
+</script>
+
+</body>
+</html>

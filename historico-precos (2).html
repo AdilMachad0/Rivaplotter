@@ -1,0 +1,1252 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Preços de Hardware — RivaPlotter</title>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --red:#e42824;--rdim:rgba(228,40,36,.1);--rglow:rgba(228,40,36,.3);
+  --bg:#0c0c0c;--sf:#131313;--sf2:#191919;--sf3:#212121;--sf4:#2c2c2c;
+  --bd:#222;--bd2:#2e2e2e;--bd3:#3c3c3c;
+  --tx:#f0f0f0;--mu:#555;--di:#888;--dim:#bbb;
+  --gr:#00CC96;--bl:#636EFA;--or:#FFA15A;--pu:#AB63FA;--tl:#19D3F3;
+  --sb:480px; /* Lateral mais larga */
+}
+body{font-family:'Poppins',sans-serif;background:var(--bg);color:var(--tx);display:flex;height:100vh;overflow:hidden}
+
+/* ── BARRAS DE ROLAGEM ── */
+::-webkit-scrollbar{width:8px; height:8px} /* Mais grossas */
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#444;border-radius:4px} /* Mais claras para dar contraste no fundo escuro */
+::-webkit-scrollbar-thumb:hover{background:#666}
+
+/* ══ SIDEBAR ══ */
+#sb{
+  width:var(--sb);
+  flex-shrink:0;
+  background:var(--sf);
+  border-right:1px solid var(--bd);
+  display:flex;
+  flex-direction:column;
+  height:100vh; /* Trava a altura máxima na tela */
+  overflow:hidden; /* Impede a barra lateral inteira de vazar */
+}
+
+.sb-head{padding:18px 20px 14px;border-bottom:1px solid var(--bd);flex-shrink:0}
+.sb-logo{font-size:22px;font-weight:900;letter-spacing:-.6px}
+.sb-logo span{color:var(--red)}
+.sb-sub{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--red);letter-spacing:3px;text-transform:uppercase;margin-top:3px}
+.back{
+  margin-top:11px;width:100%;padding:8px 13px;
+  background:transparent;border:1px solid var(--bd2);border-radius:6px;
+  color:var(--mu);font-size:12px;cursor:pointer;text-align:left;
+  font-family:'Poppins',sans-serif;transition:.2s;display:flex;align-items:center;gap:6px;
+}
+.back:hover{background:var(--sf3);color:var(--dim);border-color:var(--bd3)}
+
+/* ── TABS ── */
+.tabs{
+  display:flex;margin:14px 20px 0;gap:4px;
+  background:var(--sf2);border:1px solid var(--bd);
+  border-radius:8px;padding:4px;flex-shrink:0;
+  overflow-x:auto; /* Permite rolar as abas horizontalmente */
+}
+.tab{
+  flex:1 0 auto; /* Impede o esmagamento das abas */
+  padding:10px 16px;
+  font-size:13px;
+  font-weight:600;border-radius:5px;
+  cursor:pointer;transition:.2s;color:var(--mu);
+  border:none;background:transparent;font-family:'Poppins',sans-serif;
+  display:flex;align-items:center;justify-content:center;gap:6px;
+}
+.tab.on{background:var(--sf4);color:var(--tx);box-shadow:0 1px 5px rgba(0,0,0,.5)}
+.tab-hr{height:1px;background:var(--bd);margin:12px 0 0;flex-shrink:0}
+
+/* ── PAINÉIS DE CONFIGS (O Segredo da Rolagem) ── */
+.panel{
+  flex:1;
+  min-height:0; /* Avisa o Flexbox que o elemento pode encolher e gerar a barra de rolagem */
+  overflow-y:auto; /* Habilita a rolagem vertical exclusiva deste bloco */
+  padding:16px 20px 24px;
+  display:none;
+  flex-direction:column;
+  gap:13px;
+}
+.panel.on{display:flex}
+
+/* ── CARD ── */
+.card{background:var(--sf2);border:1px solid var(--bd);border-radius:9px;overflow:hidden;flex-shrink:0}
+.card-h{
+  display:flex;align-items:center;gap:9px;
+  padding:11px 14px;border-bottom:1px solid var(--bd);background:var(--sf3);
+}
+.card-h .ico{font-size:13px}
+.card-h .lbl{font-size:12px;font-weight:700;color:var(--dim);flex:1}
+.bdg{
+  font-family:'JetBrains Mono',monospace;font-size:8.5px;
+  letter-spacing:1.5px;text-transform:uppercase;padding:2px 7px;border-radius:3px;
+}
+.bdg.ok  {background:rgba(0,204,150,.12);color:var(--gr);border:1px solid rgba(0,204,150,.25)}
+.bdg.wait{background:rgba(255,161,90,.1);color:var(--or);border:1px solid rgba(255,161,90,.22)}
+.card-b{padding:14px}
+
+/* ── UPLOAD ── */
+.upz{
+  border:2px dashed var(--bd3);border-radius:7px;padding:20px 14px;
+  text-align:center;cursor:pointer;transition:.2s;position:relative;
+}
+.upz:hover,.upz.dov{border-color:var(--red);background:var(--rdim)}
+.upz input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.upz-ico{font-size:28px;margin-bottom:8px}
+.upz-main{font-size:13px;font-weight:600;color:var(--dim);margin-bottom:4px}
+.upz-sub{font-size:11px;color:var(--mu);line-height:1.5}
+.upz-fmt{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--mu);margin-top:6px}
+
+.pill{
+  display:flex;align-items:center;gap:10px;
+  background:rgba(0,204,150,.07);border:1px solid rgba(0,204,150,.2);
+  border-radius:7px;padding:10px 13px;
+}
+.pill-name{font-size:12px;color:var(--gr);font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pill-info{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--mu)}
+.pill-rm{background:none;border:none;color:var(--mu);cursor:pointer;font-size:15px;padding:0;width:auto;transition:.2s;line-height:1}
+.pill-rm:hover{color:var(--red)}
+
+/* mini table preview */
+.mini-tbl{
+  border:1px solid var(--bd);border-radius:6px;overflow:hidden;
+  margin-top:11px;font-family:'JetBrains Mono',monospace;font-size:9.5px;
+}
+.mtr{display:grid;border-bottom:1px solid var(--bd)}
+.mtr:last-child{border-bottom:none}
+.mtd{padding:5px 7px;color:var(--mu);border-right:1px solid var(--bd);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mtd:last-child{border-right:none}
+.mtd.h{color:var(--dim);font-weight:700;background:rgba(255,255,255,.02)}
+
+/* ── FORM ── */
+.frow{margin-bottom:12px}.frow:last-child{margin-bottom:0}
+.fl{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.fl .lbl{font-size:11.5px;font-weight:600;color:var(--dim)}
+.tag-r{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--red);background:var(--rdim);padding:2px 6px;border-radius:3px}
+.tag-o{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--mu);background:var(--sf3);padding:2px 6px;border-radius:3px}
+
+select,input[type=text]{
+  width:100%;padding:9px 11px;
+  background:var(--sf);color:var(--tx);
+  border:1px solid var(--bd2);border-radius:6px;
+  font-size:12px;font-family:'Poppins',sans-serif;
+  outline:none;transition:.18s;cursor:pointer;
+}
+select{
+  appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%23555' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 10px center;
+}
+select:focus,input:focus{border-color:var(--red);background:var(--sf2)}
+input[type=text]::placeholder{color:var(--mu)}
+
+/* ── SEARCH BOX ── */
+.search-wrap{position:relative;margin-bottom:8px}
+.search-wrap input{padding-left:32px}
+.search-ico{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--mu);font-size:13px;pointer-events:none}
+
+/* ── COLUMN SELECTOR (checkboxes) ── */
+.col-sel-wrap{
+  border:1px solid var(--bd2);border-radius:6px;overflow:hidden;
+  max-height:240px;overflow-y:auto;
+}
+.col-row{
+  display:flex;align-items:center;gap:10px;
+  padding:8px 11px;border-bottom:1px solid var(--bd);
+  cursor:pointer;transition:.15s;
+}
+.col-row:last-child{border-bottom:none}
+.col-row:hover{background:var(--sf3)}
+.col-row.selected{background:rgba(99,110,250,.08);border-left:3px solid var(--bl)}
+.col-row .chk{
+  width:16px;height:16px;border-radius:4px;
+  border:1px solid var(--bd3);background:var(--sf);
+  flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  font-size:10px;transition:.15s;
+}
+.col-row.selected .chk{background:var(--bl);border-color:var(--bl);color:#fff}
+.col-dot{
+  width:10px;height:10px;border-radius:50%;flex-shrink:0;
+}
+.col-name{font-size:11.5px;color:var(--dim);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.col-row.selected .col-name{color:var(--tx);font-weight:600}
+.col-last{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--mu);white-space:nowrap}
+
+.sel-actions{display:flex;gap:6px;margin-bottom:8px}
+.sel-act-btn{
+  flex:1;padding:6px;background:transparent;
+  border:1px solid var(--bd2);border-radius:5px;
+  color:var(--mu);font-size:11px;cursor:pointer;
+  font-family:'Poppins',sans-serif;transition:.15s;
+}
+.sel-act-btn:hover{background:var(--sf3);color:var(--dim);border-color:var(--bd3)}
+.sel-count{
+  font-family:'JetBrains Mono',monospace;font-size:10px;
+  color:var(--mu);padding:5px 0;text-align:center;
+}
+
+/* ── BUTTONS ── */
+.btn-main{
+  width:100%;padding:13px;background:var(--red);color:#fff;
+  border:none;border-radius:7px;font-size:13.5px;font-weight:700;
+  cursor:pointer;font-family:'Poppins',sans-serif;transition:.18s;
+  display:flex;align-items:center;justify-content:center;gap:8px;flex-shrink:0;
+}
+.btn-main:hover{background:#c51f1b}
+.btn-main:disabled{background:#1e1e1e;color:var(--mu);cursor:not-allowed}
+.btn-sec{
+  width:100%;padding:9px;background:transparent;color:var(--di);
+  border:1px solid var(--bd2);border-radius:7px;font-size:12px;font-weight:600;
+  cursor:pointer;font-family:'Poppins',sans-serif;transition:.18s;flex-shrink:0;margin-top:7px;
+}
+.btn-sec:hover{background:var(--sf3);color:var(--tx);border-color:var(--bd3)}
+
+/* ── PREVIEW TAB ── */
+.prv-empty{
+  flex:1;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;color:var(--mu);text-align:center;gap:10px;padding:50px 0;
+}
+.prv-empty .ico{font-size:38px;opacity:.18}
+.prv-empty p{font-size:13px}.prv-empty small{font-size:11px;opacity:.4}
+
+#prv-chart-wrap{border:1px solid var(--bd);border-radius:7px;overflow:hidden}
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.stat-c{background:var(--sf2);border:1px solid var(--bd);border-radius:7px;padding:11px 13px}
+.stat-lbl{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--mu);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:5px}
+.stat-val{font-size:15px;font-weight:700;color:var(--tx)}
+.stat-val.r{color:var(--red)}.stat-val.g{color:var(--gr)}.stat-val.b{color:var(--bl)}
+
+/* ══ MAIN ══ */
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative}
+#main-top{
+  flex-shrink:0;border-bottom:1px solid var(--bd);
+  padding:18px 32px;display:flex;align-items:flex-start;justify-content:space-between;
+}
+.mt-title{font-size:19px;font-weight:700;letter-spacing:-.3px}
+.mt-sub{font-size:11.5px;color:var(--mu);margin-top:3px}
+.mt-meta{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--mu);text-align:right;line-height:1.8}
+
+#main-body{flex:1;overflow-y:auto;padding:22px 32px;display:flex;flex-direction:column;gap:18px}
+
+.empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--mu);text-align:center;gap:12px;padding:80px 0}
+.empty .ico{font-size:46px;opacity:.16}
+.empty .t{font-size:14px}.empty .s{font-size:12px;opacity:.4}
+
+#chart-div{width:100%}
+.vsw{display:flex;gap:6px}.vsw button{background:#161616;color:#999;border:1px solid #2a2a2a;border-radius:6px;padding:7px 14px;font:600 12px Poppins,sans-serif;cursor:pointer}.vsw button.on{background:#e42824;color:#fff;border-color:#e42824}
+.flcard{background:#fff;color:#222;font-family:'Inter',sans-serif;border-radius:6px;padding:28px 32px 18px;box-shadow:0 4px 20px rgba(0,0,0,.3);max-width:1240px;margin:0 auto}
+.flcard h2{font-size:1.9rem;font-weight:800;letter-spacing:-.5px;margin:0 0 6px;color:#222}
+.flcard .fl-sub{font-size:1.02rem;color:#555;margin-bottom:14px}
+.flcard .fl-legend{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 10px}
+.flcard .fl-lg{padding:4px 10px;border-radius:5px;font-size:.78rem;font-weight:700}
+.flcard .fl-foot{margin-top:8px;font-size:.78rem;color:#6b7280}
+@media(max-width:640px){.flcard{padding:18px 14px 12px}.flcard h2{font-size:1.3rem}}
+#tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead th{
+  background:var(--red);color:#fff;padding:9px 12px;
+  text-align:left;font-size:11.5px;font-weight:600;white-space:nowrap;
+  cursor:pointer;user-select:none;
+}
+thead th:hover{background:#bf1c18}
+tbody td{padding:8px 12px;border-bottom:1px solid var(--bd);color:var(--di);white-space:nowrap}
+tbody tr:hover td{background:var(--sf2);color:var(--tx)}
+
+/* ══ PiP ══ */
+#pip{
+  position:fixed;bottom:26px;right:28px;width:290px;
+  background:var(--sf);border:1px solid var(--bd3);border-radius:12px;
+  box-shadow:0 10px 40px rgba(0,0,0,.75),0 0 0 1px var(--bd);
+  z-index:9999;display:none;flex-direction:column;overflow:hidden;
+  transition:width .28s ease,box-shadow .22s;
+}
+#pip:hover{box-shadow:0 14px 48px rgba(0,0,0,.85),0 0 0 1px var(--red)}
+#pip.big{width:440px}
+.pip-h{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:9px 13px;border-bottom:1px solid var(--bd);background:var(--sf2);flex-shrink:0;
+}
+.pip-left{display:flex;align-items:center;gap:8px}
+.pip-dot{width:7px;height:7px;border-radius:50%;background:var(--red);box-shadow:0 0 8px var(--rglow);animation:dpulse 2s ease-in-out infinite}
+@keyframes dpulse{0%,100%{opacity:1}50%{opacity:.3}}
+.pip-title{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:var(--di);letter-spacing:1px}
+.pip-acts{display:flex;align-items:center;gap:4px}
+.pip-btn{background:none;border:1px solid transparent;color:var(--mu);cursor:pointer;font-size:13px;padding:3px 6px;width:auto;border-radius:4px;transition:.18s;line-height:1}
+.pip-btn:hover{background:var(--sf3);color:var(--tx);border-color:var(--bd2)}
+#pip-chart{width:100%;height:150px;transition:height .28s ease}
+#pip.big #pip-chart{height:240px}
+.pip-f{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:7px 13px;border-top:1px solid var(--bd);
+  font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--mu);background:var(--sf2);flex-shrink:0;
+}
+.pip-f .hi{color:var(--gr)}
+</style>
+</head>
+<body>
+
+<!-- ══ SIDEBAR ══ -->
+<div id="sb">
+  <div class="sb-head">
+    <div class="sb-logo">Riva<span>Plotter</span></div>
+    <div class="sb-sub">Preços de Hardware</div>
+    <button class="back" onclick="location.href='index.html'">← Voltar ao Menu</button>
+  </div>
+
+  <div class="tabs">
+    <button class="tab on" id="tb-cfg" onclick="goTab('cfg')">⚙️ Configurar</button>
+    <button class="tab"    id="tb-prv" onclick="goTab('prv')">📊 Prévia</button>
+  </div>
+  <div class="tab-hr"></div>
+
+  <!-- ─ CONFIGURAR ─ -->
+  <div class="panel on" id="panel-cfg">
+
+    <!-- Upload -->
+    <div class="card">
+      <div class="card-h">
+        <span class="ico">📂</span>
+        <span class="lbl">Planilha de Dados</span>
+        <span class="bdg wait" id="bdg-up">AGUARDANDO</span>
+      </div>
+      <div class="card-b">
+        <div class="upz" id="upz">
+          <input type="file" id="finput" accept=".csv,.xlsx,.xls" onchange="loadFile(this.files[0])">
+          <div class="upz-ico">📂</div>
+          <div class="upz-main">Arraste ou clique aqui</div>
+          <div class="upz-sub">Planilha com histórico de preços por data</div>
+          <div class="upz-fmt">.CSV &nbsp;·&nbsp; .XLSX &nbsp;·&nbsp; .XLS</div>
+        </div>
+        <div id="file-ok" style="display:none"></div>
+        <div id="mini-tbl-wrap" style="display:none"></div>
+      </div>
+    </div>
+
+    <!-- Eixo X (Data) -->
+    <div class="card" id="card-x" style="opacity:.38;pointer-events:none">
+      <div class="card-h"><span class="ico">📅</span><span class="lbl">Coluna de Data (Eixo X)</span><span class="bdg wait" id="bdg-x">PENDENTE</span></div>
+      <div class="card-b">
+        <div class="frow">
+          <div class="fl"><span class="lbl">Selecione a coluna de data</span><span class="tag-r">REQUIRED</span></div>
+          <select id="sel-x" onchange="onXChange()">
+            <option value="">— Selecione —</option>
+          </select>
+        </div>
+        <div id="x-preview" style="display:none;margin-top:8px">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--mu);margin-bottom:4px;text-transform:uppercase;letter-spacing:1.5px">Prévia dos valores</div>
+          <div id="x-vals" style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--bl);background:rgba(99,110,250,.06);border:1px solid rgba(99,110,250,.15);border-radius:5px;padding:7px 9px;line-height:1.8"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Séries (processadores) -->
+    <div class="card" id="card-ser" style="opacity:.38;pointer-events:none">
+      <div class="card-h">
+        <span class="ico">📈</span>
+        <span class="lbl">Séries de Valores</span>
+        <span class="bdg wait" id="bdg-ser">0 SELECIONADAS</span>
+      </div>
+      <div class="card-b">
+        <div class="search-wrap">
+          <span class="search-ico">🔍</span>
+          <input type="text" id="search-col" placeholder="Pesquisar coluna..." oninput="filterCols()">
+        </div>
+        <div class="sel-actions">
+          <button class="sel-act-btn" onclick="selAll()">✓ Selecionar Todos</button>
+          <button class="sel-act-btn" onclick="selNone()">✕ Limpar Seleção</button>
+        </div>
+        <div class="col-sel-wrap" id="col-list"></div>
+        <div class="sel-count" id="sel-count">0 colunas selecionadas</div>
+      </div>
+    </div>
+
+    <!-- Personalizar -->
+    <div class="card" id="card-opt" style="opacity:.38;pointer-events:none">
+      <div class="card-h"><span class="ico">🎨</span><span class="lbl">Personalizar</span></div>
+      <div class="card-b">
+        <div class="frow">
+          <div class="fl"><span class="lbl">Título</span><span class="tag-o">OPCIONAL</span></div>
+          <input type="text" id="opt-ti" placeholder="Ex: Histórico de Preços — CPUs" oninput="autoRender()">
+        </div>
+        <div class="frow">
+          <div class="fl"><span class="lbl">Label Eixo Y</span><span class="tag-o">OPCIONAL</span></div>
+          <input type="text" id="opt-y" placeholder="Ex: Preço (R$)" oninput="autoRender()">
+        </div>
+        <div class="frow">
+          <div class="fl"><span class="lbl">Tema</span></div>
+          <select id="opt-th" onchange="autoRender()">
+            <option value="light">Claro</option>
+            <option value="dark">Escuro</option>
+          </select>
+        </div>
+        <div class="frow">
+          <div class="fl"><span class="lbl">Suavizar Linhas</span></div>
+          <select id="opt-sm" onchange="autoRender()">
+            <option value="linear">Linhas Retas</option>
+            <option value="spline">Curvas Suaves</option>
+          </select>
+        </div>
+        <div class="frow">
+          <div class="fl"><span class="lbl">Mostrar Marcadores</span></div>
+          <select id="opt-mk" onchange="autoRender()">
+            <option value="lines">Somente Linha</option>
+            <option value="lines+markers">Linha + Pontos</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="card-bar" style="opacity:.38;pointer-events:none">
+      <div class="card-h"><span class="ico">📊</span><span class="lbl">Barras · Preço médio</span></div>
+      <div class="card-b">
+        <div class="frow"><div class="fl"><span class="lbl">Orientação</span></div><select id="bar-or" onchange="renderBars()"><option value="h" selected>Barras horizontais</option><option value="v">Barras verticais</option></select></div><div class="frow"><div class="fl"><span class="lbl">Ordem das placas</span></div><select id="bar-ord" onchange="renderBars()"><option value="valor_desc" selected>Maior → menor preço</option><option value="valor_asc">Menor → maior preço</option><option value="az">A → Z</option><option value="za">Z → A</option></select></div><div class="frow"><div class="fl"><span class="lbl">Nomes das placas</span></div><select id="bar-pos" onchange="renderBars()"><option value="rotulo" selected>Etiqueta colorida junto da barra</option><option value="legenda">Legenda colorida no topo</option><option value="abaixo">Texto simples</option></select></div><div class="frow"><div class="fl"><span class="lbl">Máximo de placas</span></div><select id="bar-max" onchange="renderBars()"><option value="5">5</option><option value="6">6</option><option value="8">8</option><option value="10" selected>10</option><option value="12">12</option></select></div><div class="frow"><div class="fl"><span class="lbl">Cores das barras</span></div><select id="bar-cor" onchange="renderBars()"><option value="vibrante" selected>Uma cor por placa</option><option value="unica">Cor única</option></select></div>
+        <div style="font-size:11px;color:#777;line-height:1.4;margin-top:6px">As placas são as selecionadas em "Séries de Valores". A barra mostra a média de todos os preços do CSV.</div>
+      </div>
+    </div>
+
+    <button class="btn-main" id="btn-g" onclick="render()" disabled>📈 Gerar Gráfico</button>
+    <button class="btn-sec"  id="btn-s" onclick="salvar()" style="display:none">💾 Salvar como HTML</button>
+
+  </div><!-- /panel-cfg -->
+
+  <!-- ─ PRÉVIA ─ -->
+  <div class="panel" id="panel-prv">
+    <div class="prv-empty" id="prv-empty">
+      <div class="ico">📈</div>
+      <p>Nenhum gráfico ainda</p>
+      <small>Selecione dados → o gráfico aparece aqui automaticamente</small>
+    </div>
+    <div id="prv-content" style="display:none">
+      <div id="prv-chart-wrap"><div id="prv-chart"></div></div>
+      <div class="stat-grid" id="prv-stats"></div>
+    </div>
+  </div>
+
+</div><!-- /sb -->
+
+<!-- ══ MAIN ══ -->
+<div id="main">
+  <div id="main-top">
+    <div>
+      <div class="mt-title" id="mt-title">Linhas de Preço</div>
+      <div class="mt-sub"   id="mt-sub">Carregue uma planilha para começar</div>
+    </div>
+    <div class="vsw"><button id="vw-l" class="on" onclick="setView('l')">📈 Linhas</button><button id="vw-b" onclick="setView('b')">📊 Barras · média</button></div>
+    <div class="mt-meta" id="mt-meta"></div>
+  </div>
+  <div id="main-body">
+    <div class="empty" id="empty">
+      <div class="ico">📈</div>
+      <div class="t">Nenhum gráfico gerado</div>
+      <div class="s">Carregue a planilha, escolha a coluna de data e selecione as séries</div>
+    </div>
+    <div id="chart-div" class="flcard" style="display:none">
+      <h2 id="fl-title">Histórico de Preços</h2>
+      <div class="fl-sub" id="fl-sub"></div>
+      <div class="fl-legend" id="fl-legend"></div>
+      <div id="plot-div"></div>
+      <div class="fl-foot" id="fl-foot"></div>
+    </div>
+    <div id="bar-card" class="flcard" style="display:none">
+      <h2 id="bar-title">Preço médio das placas</h2>
+      <div class="fl-sub" id="bar-sub"></div>
+      <span class="fl-dica">↓ Menor é melhor</span>
+      <div id="bar-chart" style="margin-top:10px"></div>
+      <div class="fl-foot" id="bar-foot"></div>
+    </div>
+    <div id="tbl-wrap"   style="display:none"><div id="tbl"></div></div>
+  </div>
+</div>
+
+<!-- ══ PiP ══ -->
+<div id="pip">
+  <div class="pip-h">
+    <div class="pip-left">
+      <div class="pip-dot"></div>
+      <span class="pip-title"> </span>
+    </div>
+    <div class="pip-acts">
+      <button class="pip-btn" id="pip-exp" onclick="togglePip()" title="Expandir">⛶</button>
+      <button class="pip-btn" onclick="closePip()" title="Fechar">✕</button>
+    </div>
+  </div>
+  <div id="pip-chart"></div>
+  <div class="pip-f">
+    <span id="pip-info">—</span>
+    <span class="hi" id="pip-series">—</span>
+  </div>
+</div>
+
+<script>
+/* ══════════════════════════════════
+   PALETA DE CORES (20 cores)
+══════════════════════════════════ */
+/* ===== barras (média de preços): reaproveita o motor do gráfico de hardware ===== */
+const BASECSS = ".fl-chart-v { display: flex; height: 390px; margin-top: 16px; position: relative; padding-left: 42px; padding-bottom: 52px; align-items: flex-end; gap: 14px; border-bottom: 1px solid #e5e7eb; container-type: inline-size; }.fl-y-grid { position: absolute; left: 42px; right: 0; top: 0; bottom: 52px; pointer-events: none; }.fl-grid-line { position: absolute; left: 0; right: 0; border-top: 1px solid #f0f0f0; }.fl-grid-label { position: absolute; left: -40px; top: -9px; width: 32px; text-align: right; font-size: 0.8rem; color: #666666; }.fl-v-col { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; position: relative; z-index: 2; }.fl-v-bar { width: 100%; max-width: 120px; min-height: 28px; display: flex; align-items: center; justify-content: center; color: #ffffff; font-weight: 700; font-size: clamp(0.9rem, calc(100cqw / (var(--n, 8) * 4.5)), 1.4rem); border-radius: 1px; transition: height 0.25s ease; position: relative; cursor: pointer; }.fl-v-label { position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); width: 100%; max-width: 120px; box-sizing: border-box; padding: 0 2px; font-size: clamp(7.5px, calc(100cqw / (var(--n, 8) * 6.2)), 12px); font-weight: 600; line-height: 1.18; color: #222222; text-align: center; white-space: normal; word-break: break-word; overflow: visible; }.fl-chart-h { display: flex; flex-direction: column; gap: 14px; padding: 10px 0; }.fl-h-row { display: grid; grid-template-columns: 170px 1fr; align-items: center; gap: 14px; }.fl-h-label { font-size: 0.85rem; font-weight: 600; line-height: 1.2; color: #222222; text-align: right; white-space: normal; word-break: break-word; }.fl-h-track { background: #f9fafb; height: 44px; display: flex; align-items: center; }.fl-h-bar { height: 100%; min-width: 48px; display: flex; align-items: center; justify-content: center; color: #ffffff; font-weight: 700; font-size: 1.25rem; transition: width 0.25s ease; cursor: pointer; }";
+const PAL12 = [{bg:'#2563eb',txt:'#fff'},{bg:'#dc2626',txt:'#fff'},{bg:'#16a34a',txt:'#fff'},{bg:'#f59e0b',txt:'#000'},{bg:'#7c3aed',txt:'#fff'},{bg:'#0891b2',txt:'#fff'},{bg:'#db2777',txt:'#fff'},{bg:'#65a30d',txt:'#fff'},{bg:'#ea580c',txt:'#fff'},{bg:'#475569',txt:'#fff'},{bg:'#0d9488',txt:'#fff'},{bg:'#a16207',txt:'#fff'}];
+    const CSS_RESP = '.fl-h-row{grid-template-columns:clamp(96px,26%,170px) 1fr;gap:10px}.fl-h-track{background-color:#f9fafb;background-image:linear-gradient(to right,#e2e5ea 1px,transparent 1px);background-size:50% 100%;border-right:1px solid #e2e5ea}.fl-h-axis{margin-top:-4px}.fl-h-ticks{display:flex;justify-content:space-between;font-size:.72rem;color:#6b7280}@media (max-width:640px){.fl-chart-h{gap:10px}.fl-h-row{grid-template-columns:1fr!important;gap:3px}.fl-h-label{text-align:left!important;font-size:.8rem}.fl-h-label span{max-width:100%}.fl-h-track{height:34px!important}.fl-h-bar{font-size:.95rem!important;min-width:36px!important}.fl-h-axis-empty{display:none}.fl-chart-v{height:320px!important;padding-left:34px!important;gap:6px!important}.fl-legend{gap:5px}.fl-lg{font-size:.7rem;padding:3px 7px}}';
+    const CSS_ANIM = '@keyframes flGrowV{from{height:0;min-height:0}}@keyframes flGrowH{from{width:0;min-width:0}}@keyframes flFadeIn{from{opacity:0}}@keyframes flPill{from{opacity:0;transform:translateX(-50%) translateY(6px)}}@keyframes flRise{from{opacity:0;transform:translateY(8px)}}.fl-v-bar{animation:flGrowV .55s cubic-bezier(.22,.8,.3,1) both;animation-delay:calc(var(--i,0)*45ms);transition:filter .15s}.fl-h-bar{animation:flGrowH .6s cubic-bezier(.22,.8,.3,1) both;animation-delay:calc(var(--i,0)*45ms);transition:filter .15s}.fl-v-bar:hover,.fl-h-bar:hover{filter:brightness(1.1)}.fl-pill{animation:flPill .35s ease-out both;animation-delay:calc(var(--i,0)*45ms + 380ms)}.fl-h-label{animation:flFadeIn .4s ease-out both;animation-delay:calc(var(--i,0)*45ms)}.fl-lg{animation:flFadeIn .4s ease-out both}.flourish-card{animation:flRise .5s ease-out both}@media (prefers-reduced-motion:reduce){.fl-v-bar,.fl-h-bar,.fl-pill,.fl-h-label,.fl-lg,.flourish-card{animation:none!important}}';
+    const CSS_EXTRA = CSS_RESP + CSS_ANIM + '.fl-tooltip{position:fixed;z-index:9999;pointer-events:none;background:rgba(17,24,39,.92);color:#fff;padding:10px 12px;border-radius:8px;font-size:.8rem;line-height:1.5;max-width:290px;box-shadow:0 8px 24px rgba(0,0,0,.3);opacity:0;transition:opacity .12s;backdrop-filter:blur(3px)}.fl-tooltip.show{opacity:1}.fl-tooltip hr{border:0;border-top:1px solid rgba(255,255,255,.2);margin:6px 0}.fl-tooltip .mut{color:#cbd5e1}.fl-pill{position:absolute;left:50%;transform:translateX(-50%);width:100%;max-width:120px;box-sizing:border-box;padding:3px 3px;border-radius:4px;font-size:clamp(7.5px,calc(100cqw / (var(--n,8) * 6.2)),12px);font-weight:700;line-height:1.15;text-align:center;z-index:3;white-space:normal;word-break:break-word;overflow:visible}.fl-v-label{position:absolute;top:calc(100% + 6px);left:50%;transform:translateX(-50%);width:100%;max-width:120px;box-sizing:border-box;padding:0 2px;font-size:clamp(7.5px,calc(100cqw / (var(--n,8) * 6.2)),12px);font-weight:600;line-height:1.18;color:#222;text-align:center;white-space:normal;word-break:break-word;overflow:visible}.fl-legend{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}.fl-lg{padding:4px 10px;border-radius:5px;font-size:.78rem;font-weight:700}.fl-gen-bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 12px;font-size:.76rem;color:#4b5563;font-weight:600}.fl-gen-item{display:inline-flex;align-items:center;gap:5px;background:#f3f4f6;border:1px solid #e5e7eb;padding:2px 8px;border-radius:4px}.fl-gen-dot{width:9px;height:9px;border-radius:2px;display:inline-block}.fl-chart-v{height:390px;margin-top:16px;padding-bottom:52px;container-type:inline-size}.fl-y-grid{bottom:52px}.fl-v-col{min-width:0}[data-i]{cursor:pointer}';
+
+    // Constrói os itens do gráfico:
+    // - Quando "Menor é melhor" (custo_ponto), ordena do menor para o maior (menores na esquerda)
+    // - Não exibe Consumo nem Temperatura no popup (tooltip)
+    function construirItens(o) {
+        const num = v => { if (typeof v === 'number') return v; if (v === null || v === undefined) return NaN; let s = String(v).trim().replace(/[^\d.,-]/g, ''); if (!s) return NaN; if (s.includes(',') && s.includes('.')) s = s.lastIndexOf(',') > s.lastIndexOf('.') ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, ''); else if (s.includes(',')) s = s.replace(',', '.'); return parseFloat(s); };
+        const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+        const brl = n => 'R$ ' + n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const m = o.meta ? o.meta[o.teste] : null;
+        const itens = [];
+        o.idxs.forEach((idx, pos) => {
+            const l = o.dados[idx]; if (!l) return;
+            const nome = String(l[o.colHw] || `Linha ${idx + 1}`), perf = num(l[o.teste]), preco = o.colPreco ? num(l[o.colPreco]) : NaN;
+            if (!isFinite(perf) || perf <= 0) return;
+            if (o.metrica !== 'bruto' && (!isFinite(preco) || preco <= 0)) return;
+            let val = perf, txt = Number.isInteger(perf) ? String(perf) : perf.toFixed(1);
+            if (o.modoPreco) txt = Math.round(perf).toLocaleString('pt-BR');
+            else if (o.metrica === 'custo_ponto') { val = preco / perf; txt = val.toFixed(1); }
+            if (!isFinite(val)) return;
+            const cor = o.corFn(nome, pos, l);
+            itens.push({ idx, nome, cor, val, txt, perf, preco });
+        });
+
+        const menorMelhor = o.metrica === 'custo_ponto' || !!o.modoPreco;
+        // Ordenação principal: quando menor é melhor, menores barras ficam à esquerda (a.val - b.val); quando maior é melhor, maiores à esquerda (b.val - a.val)
+        itens.sort((a, b) => menorMelhor ? a.val - b.val : b.val - a.val);
+
+        itens.forEach((it, i) => { it.rank = i + 1; });
+        const lider = itens[0];
+
+        // Tooltip limpo (sem Consumo e sem Temperatura)
+        itens.forEach((it) => {
+            const catBadge = (it.cor && it.cor.cat && it.cor.cat !== 'Outros')
+                ? ' <span style="font-size:.72rem;padding:1px 6px;border-radius:3px;background:rgba(255,255,255,.15);color:#e2e8f0;font-weight:600">' + esc(it.cor.cat) + '</span>'
+                : '';
+            let h = '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:.9rem"><span style="width:10px;height:10px;border-radius:50%;background:' + it.cor.bg + '"></span><b>' + esc(it.nome) + '</b>' + catBadge + '</div><hr>';
+            if (m) h += '<div class="mut">' + esc(m.jogo + (m.resRotulo ? ' · ' + m.resRotulo : '')) + '</div>';
+            if (o.modoPreco) h += '<div>Preço médio: <b>' + brl(it.perf) + '</b></div>' + ['Menor preço', 'Maior preço', 'Último preço'].map(k => num(o.dados[it.idx][k]) > 0 ? '<div>' + k + ': <b>' + brl(num(o.dados[it.idx][k])) + '</b></div>' : '').join('');
+            else h += '<div>Desempenho: <b>' + (Number.isInteger(it.perf) ? it.perf : it.perf.toFixed(1)) + ' FPS/pts</b></div>';
+            if (isFinite(it.preco) && it.preco > 0) h += '<div>Preço: <b>' + brl(it.preco) + '</b></div><div>Custo por FPS: <b>' + brl(it.preco / it.perf) + '</b></div>';
+            h += '<div class="mut">Posição #' + it.rank + ' de ' + itens.length + (it.rank > 1 ? (menorMelhor ? ' · ' + Math.round((it.val / lider.val - 1) * 100) + '% mais caro que o líder' : ' · ' + Math.round(it.val / lider.val * 100) + '% do líder') : ' · 🏆 líder') + '</div>';
+            it.tip = h;
+        });
+
+        const ord = o.ordem || 'valor_desc';
+        if (ord === 'valor_asc') itens.reverse();
+        else if (ord === 'az' || ord === 'za') itens.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { numeric: true, sensitivity: 'base' }) * (ord === 'za' ? -1 : 1));
+        return itens;
+    }
+
+    function renderizarGrafico(c, itens, cfg) {
+        c.innerHTML = '';
+        if (!itens.length) { c.innerHTML = '<div style="padding:80px 20px;text-align:center;color:#6b7280">' + (cfg.vazio || 'Sem dados') + '</div>'; return; }
+        let tip = document.getElementById('flTooltip');
+        if (!tip) { tip = document.createElement('div'); tip.id = 'flTooltip'; tip.className = 'fl-tooltip'; document.body.appendChild(tip); }
+        const esc = t => String(t).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+        const duasLinhas = t => {
+            const s = String(t || '').trim().replace(/\s+/g, ' ');
+            const partes = s.split(' ');
+            if (partes.length <= 1) return esc(s);
+            const meio = s.length / 2;
+            let melhorIdx = 1, menorDist = Infinity, acum = 0;
+            for (let i = 0; i < partes.length - 1; i++) {
+                acum += partes[i].length + (i > 0 ? 1 : 0);
+                const dist = Math.abs(acum - meio);
+                if (dist < menorDist) { menorDist = dist; melhorIdx = i + 1; }
+            }
+            return esc(partes.slice(0, melhorIdx).join(' ')) + '<br>' + esc(partes.slice(melhorIdx).join(' '));
+        };
+
+        // Mostra legenda de Sockets / Séries quando o esquema por gerações está ativo
+        if (cfg.esquemaCor === 'geracoes') {
+            const categoriasVistas = new Map();
+            itens.forEach(it => {
+                if (it.cor && it.cor.cat && !categoriasVistas.has(it.cor.cat)) {
+                    categoriasVistas.set(it.cor.cat, it.cor.bg);
+                }
+            });
+            if (categoriasVistas.size > 0) {
+                const genBar = document.createElement('div');
+                genBar.className = 'fl-gen-bar';
+                genBar.innerHTML = Array.from(categoriasVistas.entries()).map(([cat, bg]) =>
+                    `<span class="fl-gen-item"><span class="fl-gen-dot" style="background:${bg}"></span>${esc(cat)}</span>`
+                ).join('');
+                c.appendChild(genBar);
+            }
+        }
+
+        const teto = Math.max.apply(null, itens.map(i => i.val)) * 1.22;
+        const pos = cfg.pos || 'rotulo';
+        if (pos === 'legenda') {
+            const lg = document.createElement('div'); lg.className = 'fl-legend';
+            lg.innerHTML = itens.map((it, i) => '<span class="fl-lg" data-i="' + i + '" style="background:' + it.cor.bg + ';color:' + it.cor.txt + '">' + esc(it.nome) + '</span>').join('');
+            c.appendChild(lg);
+        }
+        if (cfg.orient === 'v') {
+            const ch = document.createElement('div'); ch.className = 'fl-chart-v'; ch.style.setProperty('--n', itens.length);
+            const g = document.createElement('div'); g.className = 'fl-y-grid';
+            [0, 0.5, 1].forEach(p => { const ln = document.createElement('div'); ln.className = 'fl-grid-line'; ln.style.bottom = (p * 100) + '%'; ln.innerHTML = '<span class="fl-grid-label">' + Math.round(teto * p) + '</span>'; g.appendChild(ln); });
+            ch.appendChild(g);
+            itens.forEach((it, i) => {
+                const col = document.createElement('div'); col.className = 'fl-v-col';
+                const h = Math.max(it.val / teto * 100, 8);
+                const nome2Linhas = duasLinhas(it.nome);
+                col.innerHTML = '<div class="fl-v-bar" data-i="' + i + '" style="height:' + h + '%;background:' + it.cor.bg + ';color:' + it.cor.txt + '">' + it.txt + '</div>' +
+                    (pos === 'rotulo' ? '<div class="fl-pill" data-i="' + i + '" style="bottom:calc(' + h + '% + 6px);background:' + it.cor.bg + ';color:' + it.cor.txt + '">' + nome2Linhas + '</div>' : '') +
+                    (pos === 'abaixo' ? '<div class="fl-v-label" data-i="' + i + '">' + nome2Linhas + '</div>' : '');
+                ch.appendChild(col);
+            });
+            c.appendChild(ch);
+        } else {
+            const ch = document.createElement('div'); ch.className = 'fl-chart-h';
+            itens.forEach((it, i) => {
+                const row = document.createElement('div'); row.className = 'fl-h-row';
+                if (pos === 'legenda') row.style.gridTemplateColumns = '1fr';
+                const w = Math.max(it.val / teto * 100, 8);
+                const lab = pos === 'legenda' ? '' : (pos === 'rotulo'
+                    ? '<div class="fl-h-label"><span data-i="' + i + '" style="display:inline-block;padding:3px 8px;border-radius:5px;background:' + it.cor.bg + ';color:' + it.cor.txt + '">' + esc(it.nome) + '</span></div>'
+                    : '<div class="fl-h-label" data-i="' + i + '">' + esc(it.nome) + '</div>');
+                row.innerHTML = lab + '<div class="fl-h-track"><div class="fl-h-bar" data-i="' + i + '" style="width:' + w + '%;background:' + it.cor.bg + ';color:' + it.cor.txt + '">' + it.txt + '</div></div>';
+                ch.appendChild(row);
+            });
+            const fmtT = v => v >= 20 ? String(Math.round(v)) : v.toFixed(1);
+            const ax = document.createElement('div'); ax.className = 'fl-h-row fl-h-axis';
+            if (pos === 'legenda') ax.style.gridTemplateColumns = '1fr';
+            ax.innerHTML = (pos === 'legenda' ? '' : '<div class="fl-h-axis-empty"></div>') + '<div class="fl-h-ticks"><span>0</span><span>' + fmtT(teto / 2) + '</span><span>' + fmtT(teto) + '</span></div>';
+            ch.appendChild(ax);
+            c.appendChild(ch);
+        }
+        c.querySelectorAll('.fl-v-col,.fl-h-row').forEach(function (el, k) { el.style.setProperty('--i', k); });
+        const mostrar = (e) => {
+            const t = e.target.closest ? e.target.closest('[data-i]') : null;
+            if (!t) { tip.classList.remove('show'); return; }
+            tip.innerHTML = itens[+t.getAttribute('data-i')].tip;
+            const x = Math.min(e.clientX + 16, window.innerWidth - tip.offsetWidth - 8), y = Math.min(e.clientY + 16, window.innerHeight - tip.offsetHeight - 8);
+            tip.style.left = Math.max(x, 4) + 'px'; tip.style.top = Math.max(y, 4) + 'px';
+            tip.classList.add('show');
+        };
+        c.onmousemove = mostrar;
+        c.onclick = mostrar;
+        c.onmouseleave = () => tip.classList.remove('show');
+        if (!window._flTipOutside) {
+            window._flTipOutside = true;
+            document.addEventListener('click', function (e) {
+                if (!e.target.closest || !e.target.closest('[data-i]')) { const t2 = document.getElementById('flTooltip'); if (t2) t2.classList.remove('show'); }
+            });
+        }
+    }
+
+
+(function () { const st = document.createElement('style'); st.textContent = BASECSS + CSS_EXTRA; document.head.appendChild(st); })();
+let view = 'l';
+function showChart(on){
+  document.getElementById('chart-div').style.display = (on && view === 'l') ? 'block' : 'none';
+  document.getElementById('bar-card').style.display  = (on && view === 'b') ? 'block' : 'none';
+}
+function setView(v){
+  view = v;
+  document.getElementById('vw-l').classList.toggle('on', v === 'l');
+  document.getElementById('vw-b').classList.toggle('on', v === 'b');
+  if (snap) {
+    showChart(document.getElementById('tb-prv').classList.contains('on'));
+    if (v === 'b') renderBars(); else Plotly.Plots.resize(document.getElementById('plot-div'));
+  }
+}
+function calcBarras(){
+  const dados = [];
+  [...selected].forEach(c => {
+    const v = rawRows.map(r => r[c]).filter(x => x > 0);
+    if (!v.length) return;
+    dados.push({ Placa: c, 'Preço médio': v.reduce((p, q) => p + q, 0) / v.length, 'Menor preço': Math.min(...v), 'Maior preço': Math.max(...v), 'Último preço': v[v.length - 1] });
+  });
+  const vivo = document.getElementById('bar-cor').value === 'vibrante';
+  const itens = construirItens({ dados, idxs: dados.map((_, i) => i), colHw: 'Placa', colPreco: '', teste: 'Preço médio', metrica: 'bruto', meta: null, modoPreco: true,
+    corFn: (n, p) => vivo ? PAL12[p % PAL12.length] : { bg: '#636EFA', txt: '#fff' }, max: +document.getElementById('bar-max').value, ordem: document.getElementById('bar-ord').value });
+  return { itens, total: dados.length };
+}
+function renderBars(){
+  if (!snap) return;
+  const { itens, total } = calcBarras();
+  const fx = makeFmtX(), n = rawRows.length;
+  const ti = document.getElementById('opt-ti').value || 'Preço médio das placas';
+  document.getElementById('bar-title').textContent = ti;
+  document.getElementById('bar-sub').textContent = 'Média de todos os preços registrados · ' + n + ' datas (' + fx(rawRows[0][xCol]) + ' → ' + fx(rawRows[n - 1][xCol]) + ') · ' + itens.length + (itens.length < total ? ' de ' + total : '') + ' placas';
+  document.getElementById('bar-foot').textContent = 'Valores em R$ · passe o mouse (ou toque) em uma barra para ver menor, maior e último preço';
+  window._barItens = itens;
+  renderizarGrafico(document.getElementById('bar-chart'), itens, { orient: document.getElementById('bar-or').value, pos: document.getElementById('bar-pos').value, vazio: 'Selecione ao menos uma placa que tenha preços.' });
+}
+function salvarBarras(){
+  const itens = window._barItens; if (!itens || !itens.length) return;
+  const esc = t => String(t).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  const ti = document.getElementById('bar-title').textContent, sub = document.getElementById('bar-sub').textContent;
+  const cfg = { orient: document.getElementById('bar-or').value, pos: document.getElementById('bar-pos').value };
+  const css = "*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Inter',sans-serif;background:#f3f4f6;padding:24px;color:#222}" +
+    ".c{max-width:1240px;margin:0 auto;background:#fff;border-radius:6px;padding:28px 32px 18px;box-shadow:0 4px 20px rgba(0,0,0,.08)}" +
+    "h2{font-size:1.9rem;font-weight:800;letter-spacing:-.5px;margin-bottom:6px}.s{font-size:1.02rem;color:#555;margin-bottom:12px}.f{margin-top:10px;font-size:.78rem;color:#6b7280}" +
+    "@media(max-width:640px){body{padding:10px}.c{padding:18px 14px 12px}h2{font-size:1.3rem}}" + BASECSS + CSS_EXTRA;
+  const js = renderizarGrafico.toString() + "\nconst ITENS=" + JSON.stringify(itens) + ",CFG=" + JSON.stringify(cfg) + ";" +
+    "function desenhar(){var o=(CFG.orient==='v'&&innerWidth<560&&ITENS.length>6)?'h':CFG.orient;renderizarGrafico(document.getElementById('g'),ITENS,{orient:o,pos:CFG.pos,vazio:'Sem dados'});}" +
+    "var est=innerWidth<560;desenhar();addEventListener('resize',function(){var a=innerWidth<560;if(a!==est){est=a;desenhar();}});";
+  const html = '<!DOCTYPE html>\n<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + esc(ti) + '</title>' +
+    '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet"><style>' + css + '</style></head><body><div class="c"><h2>' + esc(ti) + '</h2><div class="s">' + esc(sub) +
+    '</div><span class="fl-dica">↓ Menor é melhor</span><div id="g"></div><div class="f">Valores em R$ · passe o mouse (ou toque) em uma barra para ver menor, maior e último preço</div></div><script>' + js + '<\/script></body></html>';
+  const b = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const el = document.createElement('a');
+  el.href = URL.createObjectURL(b);
+  el.download = ((ti.trim() || 'PRECOS').toUpperCase().replace(/\s+/g, '_')) + '_barras.html';
+  el.click();
+}
+function salvar(){ if (view === 'b') salvarBarras(); else salvarLinhas(); }
+
+const PAL=[
+  '#e42824','#636EFA','#00CC96','#AB63FA','#FFA15A',
+  '#19D3F3','#FF6692','#B6E880','#FF97FF','#FECB52',
+  '#72B7B2','#EE553B','#54A24B','#C5D4D4','#BAB0AC',
+  '#F0027F','#0082C8','#FFBC79','#D7B5A6','#AAD2CE',
+];
+
+const TEMAS={
+  dark: {bg:'#0c0c0c',paper:'#0c0c0c',font:'#f0f0f0',grid:'#1c1c1c',mu:'#404040'},
+  light:{bg:'#ffffff',paper:'#ffffff',font:'#222222',grid:'#e5e7eb',mu:'#6b7280'},
+};
+
+/* ══════════════════════════════════
+   ESTADO
+══════════════════════════════════ */
+let rawRows   = [];   
+let allCols   = [];   
+let xCol      = '';   
+let selected  = new Set();  
+let snap      = null; 
+let pipBig    = false, pipOpen = false;
+let rTimer    = null;
+
+/* ══════════════════════════════════
+   TABS & CONTROLE DA TELA PRINCIPAL
+══════════════════════════════════ */
+function goTab(t){
+  ['cfg','prv'].forEach(k=>{
+    document.getElementById('tb-'+k).classList.toggle('on',k===t);
+    document.getElementById('panel-'+k).classList.toggle('on',k===t);
+  });
+  
+  // Lógica para alternar Tabela vs Gráfico na tela principal
+  if(snap){
+    document.getElementById('tbl-wrap').style.display = (t === 'cfg') ? 'block' : 'none';
+    showChart(t === 'prv');
+    
+    if(t === 'prv') {
+      drawPrvChart();
+      // Força o gráfico a recalcular o tamanho na tela cheia ao reaparecer
+      Plotly.Plots.resize(document.getElementById('plot-div')); 
+    }
+  }
+}
+
+/* ══════════════════════════════════
+   DRAG & DROP
+══════════════════════════════════ */
+const upz=document.getElementById('upz');
+upz.addEventListener('dragover', e=>{e.preventDefault();upz.classList.add('dov')});
+upz.addEventListener('dragleave',()=>upz.classList.remove('dov'));
+upz.addEventListener('drop',     e=>{e.preventDefault();upz.classList.remove('dov');e.dataTransfer.files[0]&&loadFile(e.dataTransfer.files[0])});
+
+/* ══════════════════════════════════
+   CARREGAR ARQUIVO
+══════════════════════════════════ */
+async function loadFile(f){
+  if(!f) return;
+  const ext=f.name.split('.').pop().toLowerCase();
+  try{
+    let text='';
+    if(ext==='csv'){
+      const buf=await f.arrayBuffer();
+      try{ text=new TextDecoder('utf-8',{fatal:true}).decode(buf); }
+      catch{ text=new TextDecoder('iso-8859-1').decode(buf); }
+    } else if(['xlsx','xls'].includes(ext)){
+      const wb=XLSX.read(await f.arrayBuffer(),{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      text=XLSX.utils.sheet_to_csv(ws,{FS:';'});
+    } else { alert('Use .csv, .xlsx ou .xls'); return; }
+
+    parseCSV(text, f.name);
+
+  } catch(e){ alert('Erro ao ler arquivo: '+e.message); console.error(e); }
+}
+
+function parseCSV(text, fname){
+  const lines=text.split('\n').map(l=>l.trim()).filter(l=>l.length>0);
+  if(lines.length<2){ alert('Arquivo muito pequeno ou vazio.'); return; }
+
+  const firstLine=lines[0];
+  const sep=firstLine.includes(';') ? ';' : ',';
+  const headers=firstLine.split(sep).map(h=>h.trim().replace(/^"|"$/g,''));
+
+  rawRows=[];
+  for(let i=1;i<lines.length;i++){
+    const vals=lines[i].split(sep);
+    if(vals.length < headers.length-2) continue; 
+    const row={};
+    headers.forEach((h,j)=>{
+      let v=(vals[j]||'').trim().replace(/^"|"$/g,'');
+      if(j>0 && v!==''){
+        v=v.replace(/\./g,'').replace(',','.');
+        const n=parseFloat(v);
+        row[h]=isNaN(n)?null:n;
+      } else {
+        row[h]=v;
+      }
+    });
+    rawRows.push(row);
+  }
+
+  allCols=headers.slice(1); 
+  const dateColGuess=headers[0];
+
+  const b=document.getElementById('bdg-up');
+  b.textContent='CARREGADO'; b.className='bdg ok';
+
+  upz.style.display='none';
+  const fo=document.getElementById('file-ok');
+  fo.style.display='block';
+  fo.innerHTML=`<div class="pill">
+    <span style="font-size:18px">✅</span>
+    <div style="flex:1;min-width:0">
+      <div class="pill-name">${fname}</div>
+      <div class="pill-info">${rawRows.length} linhas · ${headers.length} colunas</div>
+    </div>
+    <button class="pill-rm" onclick="resetFile()">✕</button>
+  </div>`;
+
+  buildMiniTable(headers.slice(0,5), rawRows.slice(0,4));
+
+  unlock('card-x'); unlock('card-ser'); unlock('card-opt'); unlock('card-bar');
+
+  const sx=document.getElementById('sel-x');
+  sx.innerHTML='<option value="">— Selecione —</option>';
+  headers.forEach(h=>{
+    const o=document.createElement('option');
+    o.value=h; o.textContent=h;
+    if(h===dateColGuess) o.selected=true;
+    sx.appendChild(o);
+  });
+  xCol=dateColGuess;
+  onXChange(false);
+
+  buildColList();
+
+  selected.clear();
+  let cnt=0;
+  allCols.forEach(c=>{
+    if(cnt<5 && hasValues(c)){ selected.add(c); cnt++; }
+  });
+  updateColList();
+  checkReady();
+  autoRender();
+}
+
+function buildMiniTable(headers, rows){
+  const cw=`repeat(${headers.length},1fr)`;
+  let h=`<div class="mini-tbl">
+    <div class="mtr" style="grid-template-columns:${cw}">${headers.map(c=>`<div class="mtd h">${c}</div>`).join('')}</div>`;
+  rows.forEach(r=>{
+    h+=`<div class="mtr" style="grid-template-columns:${cw}">${headers.map(c=>`<div class="mtd">${r[c]!=null?r[c]:''}</div>`).join('')}</div>`;
+  });
+  const el=document.getElementById('mini-tbl-wrap');
+  el.innerHTML=h+'</div>'; el.style.display='block';
+}
+
+function hasValues(col){ return rawRows.some(r=>r[col]!=null); }
+function unlock(id){ document.getElementById(id).style.cssText=''; }
+
+function resetFile(){
+  rawRows=[]; allCols=[]; xCol=''; selected.clear(); snap=null;
+  upz.style.display='block';
+  document.getElementById('file-ok').style.display='none';
+  document.getElementById('mini-tbl-wrap').style.display='none';
+  document.getElementById('finput').value='';
+
+  const b=document.getElementById('bdg-up');b.textContent='AGUARDANDO';b.className='bdg wait';
+  ['card-x','card-ser','card-opt'].forEach(id=>document.getElementById(id).style.cssText='opacity:.38;pointer-events:none');
+  document.getElementById('btn-g').disabled=true;
+  document.getElementById('btn-s').style.display='none';
+  document.getElementById('col-list').innerHTML='';
+  document.getElementById('x-preview').style.display='none';
+  closePip();
+  document.getElementById('prv-empty').style.display='flex';
+  document.getElementById('prv-content').style.display='none';
+  document.getElementById('empty').style.display='flex';
+  showChart(false);
+  document.getElementById('tbl-wrap').style.display='none';
+  document.getElementById('mt-title').textContent='Linhas de Preço';
+  document.getElementById('mt-sub').textContent='Carregue uma planilha para começar';
+}
+
+/* ══════════════════════════════════
+   EIXO X (DATA)
+══════════════════════════════════ */
+function onXChange(doRender=true){
+  xCol=document.getElementById('sel-x').value;
+  if(!xCol) return;
+
+  const allH=Object.keys(rawRows[0]||{});
+  allCols=allH.filter(h=>h!==xCol);
+
+  const bdgx=document.getElementById('bdg-x');
+  bdgx.textContent='OK'; bdgx.className='bdg ok';
+
+  const vals=rawRows.slice(0,6).map(r=>r[xCol]).filter(Boolean);
+  document.getElementById('x-vals').textContent=vals.join(' · ');
+  document.getElementById('x-preview').style.display='block';
+
+  buildColList();
+  checkReady();
+  if(doRender) autoRender();
+}
+
+/* ══════════════════════════════════
+   LISTA DE COLUNAS (SÉRIES)
+══════════════════════════════════ */
+function buildColList(){ renderColList(allCols); }
+
+function filterCols(){
+  const q=document.getElementById('search-col').value.toLowerCase();
+  const visible=allCols.filter(c=>c.toLowerCase().includes(q));
+  renderColList(visible);
+}
+
+function renderColList(cols){
+  const el=document.getElementById('col-list');
+  el.innerHTML='';
+  cols.forEach((c,i)=>{
+    const palIdx=allCols.indexOf(c)%PAL.length;
+    const color=PAL[palIdx];
+    const isSel=selected.has(c);
+    const hasV=hasValues(c);
+    let lastVal='';
+    for(let j=rawRows.length-1;j>=0;j--){
+      if(rawRows[j][c]!=null){ lastVal='R$'+fmtMoney(rawRows[j][c]); break; }
+    }
+
+    const div=document.createElement('div');
+    div.className='col-row'+(isSel?' selected':'')+(hasV?'':' disabled');
+    div.id='cr-'+i;
+    div.style.opacity=hasV?'1':'.3';
+    div.style.cursor=hasV?'pointer':'not-allowed';
+    div.innerHTML=`
+      <div class="chk">${isSel?'✓':''}</div>
+      <div class="col-dot" style="background:${color}"></div>
+      <div class="col-name" title="${c}">${c}</div>
+      <div class="col-last">${lastVal}</div>`;
+    if(hasV){
+      div.addEventListener('click',()=>toggleCol(c));
+    }
+    el.appendChild(div);
+  });
+  updateSelCount();
+}
+
+function toggleCol(c){
+  if(selected.has(c)) selected.delete(c);
+  else selected.add(c);
+  updateColList();
+  checkReady();
+  autoRender();
+}
+
+function updateColList(){
+  const q=document.getElementById('search-col').value.toLowerCase();
+  const visible=allCols.filter(c=>c.toLowerCase().includes(q));
+  renderColList(visible);
+}
+
+function selAll(){
+  allCols.filter(c=>hasValues(c)).forEach(c=>selected.add(c));
+  updateColList(); checkReady(); autoRender();
+}
+function selNone(){
+  selected.clear();
+  updateColList(); checkReady(); autoRender();
+}
+
+function updateSelCount(){
+  const n=selected.size;
+  document.getElementById('sel-count').textContent=`${n} coluna${n!==1?'s':''} selecionada${n!==1?'s':''}`;
+  const bdg=document.getElementById('bdg-ser');
+  bdg.textContent=`${n} SELECIONADA${n!==1?'S':''}`;
+  bdg.className=n>0?'bdg ok':'bdg wait';
+}
+
+function checkReady(){ document.getElementById('btn-g').disabled=!(xCol&&selected.size>0); }
+
+function autoRender(){
+  if(!xCol||selected.size===0) return;
+  clearTimeout(rTimer);
+  rTimer=setTimeout(()=>render(true),200);
+}
+
+/* ══════════════════════════════════
+   CONSTRUIR TRACES
+══════════════════════════════════ */
+const MESES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+function makeFmtX(){
+  const m=rawRows.map(r=>String(r[xCol]).trim().match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})$/));
+  if(m.filter(Boolean).length<rawRows.length*.7) return v=>v;
+  const ok=m.filter(Boolean); let mA=false;
+  if(ok.some(x=>+x[1]>12)) mA=false; else if(ok.some(x=>+x[2]>12)) mA=true;
+  else mA=new Set(ok.map(x=>x[1])).size>new Set(ok.map(x=>x[2])).size;
+  return v=>{const x=String(v).trim().match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})$/); return x?MESES[(+(mA?x[1]:x[2]))-1]+'/'+x[3].slice(2):v;};
+}
+function corDe(c){ return PAL[allCols.indexOf(c)%PAL.length]; }
+function buildTraces(compact=false){
+  const fx=makeFmtX();
+  const xVals=rawRows.map(r=>fx(r[xCol]));
+  const shape=document.getElementById('opt-sm').value;
+  const mode=document.getElementById('opt-mk').value;
+  const tema=TEMAS[document.getElementById('opt-th').value];
+
+  const traces=[];
+  [...selected].forEach((c,i)=>{
+    const palIdx=allCols.indexOf(c)%PAL.length;
+    const color=PAL[palIdx];
+    const yVals=rawRows.map(r=>r[c]);
+
+    traces.push({
+      name:c,
+      x:xVals,
+      y:yVals,
+      type:'scatter',
+      mode: compact?'lines':mode,
+      line:{color, width:compact?1.5:2, shape},
+      marker:{color,size:5},
+      connectgaps:true,
+      hovertemplate:compact?undefined:`<b>${c}</b><br>Data: %{x}<br>Preço: R$ %{y:,.2f}<extra></extra>`,
+    });
+  });
+  return {traces,tema};
+}
+
+function makeLayout(tema,height,margin,compact=false){
+  const yLabel=document.getElementById('opt-y').value||'Preço (R$)';
+  return{
+    height,
+    xaxis:{
+      type:'category',
+      gridcolor:tema.grid,
+      tickfont:{color:compact?'#666':tema.mu,size:compact?8:10,family:compact?'JetBrains Mono':'Inter'},
+      title:undefined,
+      tickangle:0,
+    },
+    yaxis:{
+      gridcolor:tema.grid,
+      tickfont:{color:compact?'#666':tema.mu,size:compact?8:10,family:'JetBrains Mono'},
+      title:compact?undefined:{text:yLabel,font:{color:tema.mu,size:10}},
+      tickprefix:'R$ ',
+    },
+    paper_bgcolor:compact?'rgba(0,0,0,0)':tema.paper,
+    plot_bgcolor: compact?'rgba(0,0,0,0)':tema.bg,
+    font:{family:compact?'Poppins':'Inter',color:compact?'#888':tema.font},
+    margin,
+    showlegend:false,
+    legend:{
+      orientation:'h',
+      yanchor:'top', y:-0.22,
+      xanchor:'center', x:0.5,
+      font:{size:10,family:'Poppins'},
+    },
+    hovermode:'x unified',
+  };
+}
+
+/* ══════════════════════════════════
+   RENDER PRINCIPAL
+══════════════════════════════════ */
+function render(silent=false){
+  if(!xCol||selected.size===0) return;
+
+  const {traces,tema}=buildTraces(false);
+  // O gráfico principal agora pode usar mais altura, já que fica sozinho na aba Prévia
+  const h=Math.max(500,window.innerHeight*0.70);
+  const layout=makeLayout(tema,h,{l:80,r:24,t:10,b:50});
+
+  const ti=document.getElementById('opt-ti').value||'Histórico de Preços';
+  const su=`${selected.size} série${selected.size!==1?'s':''} · ${rawRows.length} datas`;
+  document.getElementById('fl-title').textContent=ti;
+  document.getElementById('fl-sub').textContent=su+' · '+makeFmtX()(rawRows[0][xCol])+' → '+makeFmtX()(rawRows[rawRows.length-1][xCol]);
+  document.getElementById('fl-legend').innerHTML=[...selected].map(c=>{
+    const cor=corDe(c), lum=parseInt(cor.slice(1,3),16)*.299+parseInt(cor.slice(3,5),16)*.587+parseInt(cor.slice(5,7),16)*.114;
+    return `<span class="fl-lg" style="background:${cor};color:${lum>150?'#111':'#fff'}">${c}</span>`;}).join('');
+  document.getElementById('fl-foot').textContent='Preços em R$ · passe o mouse sobre o gráfico para ver cada mês';
+  document.getElementById('mt-title').textContent=ti;
+  document.getElementById('mt-sub').textContent=su;
+  document.getElementById('mt-meta').innerHTML=`${rawRows.length} datas<br>${selected.size} séries`;
+
+  document.getElementById('empty').style.display='none';
+  
+  // Verifica qual aba está ativa para mostrar o conteúdo correto
+  const curTab = document.getElementById('tb-cfg').classList.contains('on') ? 'cfg' : 'prv';
+  document.getElementById('tbl-wrap').style.display = (curTab === 'cfg') ? 'block' : 'none';
+  showChart(curTab === 'prv');
+  
+  Plotly.react('plot-div',traces,layout,{responsive:true,displayModeBar:false});
+
+  buildTable();
+  snap={traces};
+  document.getElementById('btn-s').style.display='block';
+
+  drawPip();
+  if(curTab === 'prv') drawPrvChart();
+  renderBars();
+}
+
+/* ══════════════════════════════════
+   PREVIEW TAB (MINI-GRÁFICO LATERAL)
+══════════════════════════════════ */
+function drawPrvChart(){
+  if(!xCol||selected.size===0) return;
+  const {traces,tema}=buildTraces(true);
+  const compact=traces.map(t=>({...t,line:{...t.line,width:1.5},mode:'lines'}));
+  const h=Math.max(180, 200);
+  const layout=makeLayout(tema,h,{l:36,r:6,t:6,b:28},true);
+
+  document.getElementById('prv-empty').style.display='none';
+  document.getElementById('prv-content').style.display='block';
+  Plotly.react('prv-chart',compact,layout,{responsive:true,staticPlot:true});
+
+  const firstCol=[...selected][0];
+  const vals=rawRows.map(r=>r[firstCol]).filter(v=>v!=null);
+  if(vals.length>0){
+    const mx=Math.max(...vals), mn=Math.min(...vals);
+    const avg=vals.reduce((a,b)=>a+b,0)/vals.length;
+    const last=vals[vals.length-1];
+    document.getElementById('prv-stats').innerHTML=`
+      <div class="stat-c"><div class="stat-lbl">Máximo</div><div class="stat-val r">R$${fmtMoney(mx)}</div></div>
+      <div class="stat-c"><div class="stat-lbl">Mínimo</div><div class="stat-val g">R$${fmtMoney(mn)}</div></div>
+      <div class="stat-c"><div class="stat-lbl">Média</div><div class="stat-val">${'R$'+fmtMoney(avg)}</div></div>
+      <div class="stat-c"><div class="stat-lbl">Último Preço</div><div class="stat-val b">R$${fmtMoney(last)}</div></div>`;
+  }
+}
+
+/* ══════════════════════════════════
+   PiP
+══════════════════════════════════ */
+function drawPip(){
+  if(!xCol||selected.size===0) return;
+  const pip=document.getElementById('pip');
+  pip.style.display='flex'; pipOpen=true;
+
+  const xVals=rawRows.map(r=>r[xCol]);
+  const h=pipBig?240:150;
+  const pipTraces=[...selected].slice(0,8).map((c,i)=>{
+    const palIdx=allCols.indexOf(c)%PAL.length;
+    return{
+      x:xVals, y:rawRows.map(r=>r[c]),
+      type:'scatter', mode:'lines',
+      line:{color:PAL[palIdx],width:1.5,shape:'linear'},
+      connectgaps:true, hoverinfo:'none', name:c,
+    };
+  });
+
+  const layout={
+    height:h,
+    xaxis:{visible:false},
+    yaxis:{visible:false},
+    paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+    margin:{l:4,r:4,t:4,b:4},
+    showlegend:false,
+    hovermode:false,
+  };
+  Plotly.react('pip-chart',pipTraces,layout,{responsive:true,staticPlot:true,displayModeBar:false});
+  document.getElementById('pip-info').textContent=`${rawRows.length} datas`;
+  document.getElementById('pip-series').textContent=`${selected.size} série${selected.size!==1?'s':''}`;
+}
+
+function togglePip(){
+  pipBig=!pipBig;
+  document.getElementById('pip').classList.toggle('big',pipBig);
+  document.getElementById('pip-exp').textContent=pipBig?'⊡':'⛶';
+  if(snap) drawPip();
+}
+function closePip(){
+  pipOpen=false;
+  document.getElementById('pip').style.display='none';
+}
+
+/* ══════════════════════════════════
+   TABELA
+══════════════════════════════════ */
+function buildTable(){
+  // Puxa a planilha inteira (Eixo X + Todas as colunas)
+  const cols=[xCol, ...allCols];
+  
+  let h=`<table><thead><tr>${cols.map(c=>{
+    // Adiciona um fundo azul no cabeçalho das colunas que estão selecionadas
+    const isSel = selected.has(c);
+    return `<th style="${isSel ? 'background:var(--bl)' : ''}">${c}</th>`;
+  }).join('')}</tr></thead><tbody>`;
+  
+  rawRows.forEach(r=>{
+    h+=`<tr>${cols.map((c,i)=>
+      `<td>${i===0?r[c]:( r[c]!=null?'R$ '+fmtMoney(r[c]):'-')}</td>`
+    ).join('')}</tr>`;
+  });
+  document.getElementById('tbl').innerHTML=h+'</tbody></table>';
+}
+
+/* ══════════════════════════════════
+   SALVAR
+══════════════════════════════════ */
+function salvarLinhas(){
+  const {traces}=buildTraces(false);
+  const layout=makeLayout(TEMAS.light,520,{l:70,r:16,t:10,b:46});
+  delete layout.height; layout.autosize=true;
+  const ti=document.getElementById('opt-ti').value||'Histórico de Preços';
+  const esc=t=>String(t).replace(/[&<>"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
+  const sub=document.getElementById('fl-sub').textContent;
+  const leg=document.getElementById('fl-legend').innerHTML;
+  const css="*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Inter',sans-serif;background:#f3f4f6;padding:24px;color:#222}"+
+    ".c{max-width:1240px;margin:0 auto;background:#fff;border-radius:6px;padding:28px 32px 18px;box-shadow:0 4px 20px rgba(0,0,0,.08)}"+
+    "h2{font-size:1.9rem;font-weight:800;letter-spacing:-.5px;margin-bottom:6px}.s{font-size:1.02rem;color:#555;margin-bottom:14px}"+
+    ".fl-legend{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}.fl-lg{padding:4px 10px;border-radius:5px;font-size:.78rem;font-weight:700}"+
+    "#g{width:100%;height:520px}.f{margin-top:8px;font-size:.78rem;color:#6b7280}"+
+    "@media(max-width:640px){body{padding:10px}.c{padding:18px 14px 12px}h2{font-size:1.3rem}#g{height:420px}}";
+  const html='<!DOCTYPE html>\n<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">'+
+    '<title>'+esc(ti)+'</title><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">'+
+    '<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"><\/script><style>'+css+'</style></head><body><div class="c"><h2>'+esc(ti)+'</h2><div class="s">'+esc(sub)+
+    '</div><div class="fl-legend">'+leg+'</div><div id="g"></div><div class="f">Preços em R$ · passe o mouse sobre o gráfico para ver cada mês</div></div>'+
+    '<script>Plotly.newPlot("g",'+JSON.stringify(traces)+','+JSON.stringify(layout)+',{responsive:true,displayModeBar:false});<\/script></body></html>';
+  const b=new Blob([html],{type:'text/html;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(b);
+  a.download=((ti.trim()||'PRECOS').toUpperCase().replace(/\s+/g,'_'))+'_precos.html';
+  a.click();
+}
+
+/* ══════════════════════════════════
+   UTILS
+══════════════════════════════════ */
+function fmtMoney(n){
+  return Number(n).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+window.addEventListener('resize',()=>{
+  if(snap){
+    Plotly.Plots.resize(document.getElementById('plot-div'));
+    if(pipOpen) Plotly.Plots.resize(document.getElementById('pip-chart'));
+  }
+});
+</script>
+</body>
+</html>
